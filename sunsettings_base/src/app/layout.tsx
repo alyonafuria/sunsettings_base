@@ -37,7 +37,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen overflow-hidden`}
       >
-        <Menubar className="h-16 px-2">
+        <Menubar className="top-0 h-16 px-2">
           <div className="flex w-full items-center">
             <div className="flex-1" />
             <Link
@@ -49,7 +49,7 @@ export default function RootLayout({
             <nav className="flex-1" />
           </div>
         </Menubar>
-        <main className="relative z-10 h-[calc(100vh-4rem)] overflow-hidden">
+        <main className="relative z-10  overflow-hidden">
           {children}
         </main>
       </body>

@@ -31,7 +31,7 @@ export function Tiles({
   return (
     <div 
       className={cn(
-        "fixed inset-0 flex w-full h-full justify-center",
+        "fixed flex w-full h-full justify-center",
         className
       )}
     >
