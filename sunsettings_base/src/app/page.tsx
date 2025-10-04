@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { Tiles } from "@/components/ui/tiles";
+import { LocationCombobox } from "@/components/ui/location-combobox";
 
 export default function Home() {
   return (
@@ -12,9 +12,9 @@ export default function Home() {
         tileSize="md"
       />
 
-      {/* Page content (add your sections here) */}
-      <div className="container py-8">
-        {/* Placeholder content */}
+      {/* Positioned at 1/4 of the screen height */}
+      <div className="absolute left-1/2 top-[25%] -translate-x-1/2 z-10">
+        <LocationCombobox />
       </div>
     </div>
   );
