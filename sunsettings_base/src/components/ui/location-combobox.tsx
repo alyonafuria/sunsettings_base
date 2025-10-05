@@ -32,7 +32,6 @@ export function LocationCombobox({
     detectLoading,
     suggestions,
     suggestLoading,
-    selected,
     selectedLabel,
     runDetection,
     handleSelect,

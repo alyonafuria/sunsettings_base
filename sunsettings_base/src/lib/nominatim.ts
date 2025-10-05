@@ -77,7 +77,7 @@ export async function searchPlaces(query: string, opts?: { limit?: number; signa
     const parentCity = a.city || a.town || a.village || ""
     const region = a.state || a.county || ""
 
-    let tail: string[] = []
+    const tail: string[] = []
     if (isNeighbourhood) {
       if (parentCity) tail.push(parentCity)
       if (countryCode) tail.push(countryCode)

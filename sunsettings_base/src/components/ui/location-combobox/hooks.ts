@@ -49,7 +49,6 @@ export function useLocationCombobox({
       const raw = localStorage.getItem("locationCache")
       if (raw) {
         const cached = JSON.parse(raw) as { label: string; value: string; timestamp: number }
-        const isFresh = Date.now() - cached.timestamp < 60 * 60 * 1000
         if (cached?.value && cached?.label) {
           setLastPicked({ value: cached.value, label: cached.label })
           setInternalValue((iv) => iv ?? cached.value)
@@ -58,7 +57,7 @@ export function useLocationCombobox({
         }
       }
     } catch {}
-  }, [])
+  }, [onChange])
 
   // Explicit detection
   const runDetection = React.useCallback(() => {
@@ -107,8 +106,6 @@ export function useLocationCombobox({
     opts.find((o) => o.value === internalValue) ||
     suggestions.find((o) => o.value === internalValue) ||
     (lastPicked && lastPicked.value === internalValue ? lastPicked : null)
-
-  const selectedLabel: string | null = selected ? selected.label : null
 
   // Debounced suggestions (1s)
   React.useEffect(() => {
