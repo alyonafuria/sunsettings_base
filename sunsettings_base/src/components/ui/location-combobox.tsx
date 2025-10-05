@@ -33,6 +33,7 @@ export function LocationCombobox({
     suggestions,
     suggestLoading,
     selected,
+    selectedLabel,
     runDetection,
     handleSelect,
     handleFreeform,
@@ -63,7 +64,9 @@ export function LocationCombobox({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center justify-between gap-2 h-12 px-4 min-w-72 border-2 border-border bg-main text-main-foreground rounded-base font-heading",
+            "inline-flex items-center justify-between gap-2 h-12 px-4 border-2 border-border bg-main text-main-foreground rounded-base font-heading overflow-hidden",
+            // Responsive fixed widths
+            "w-[90vw] max-w-[90vw] md:w-[30vw] md:max-w-[30vw]",
             "shadow-shadow transition-colors",
             className,
           )}
@@ -71,8 +74,8 @@ export function LocationCombobox({
           onFocus={prefetchDropdown}
           onTouchStart={prefetchDropdown}
         >
-          <span className="truncate">
-            {detectLoading ? "Detecting location..." : selected ? selected.label : placeholder}
+          <span className="truncate flex-1 min-w-0">
+            {detectLoading ? "Detecting location..." : selectedLabel ?? placeholder}
           </span>
           {detectLoading ? (
             <span
@@ -98,7 +101,7 @@ export function LocationCombobox({
         align="center"
         sideOffset={8}
         avoidCollisions={false}
-        className="p-0 w-80 border-0 shadow-none overflow-hidden bg-background"
+        className="p-0 border-0 shadow-none overflow-hidden bg-background w-[90vw] max-w-[90vw] md:w-[25vw] md:max-w-[25vw]"
       >
         {open ? (
           <LazyContent

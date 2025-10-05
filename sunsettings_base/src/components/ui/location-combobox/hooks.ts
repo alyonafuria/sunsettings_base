@@ -20,11 +20,17 @@ export function useLocationCombobox({
   const [error, setError] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState<string>("")
   const [currentValue, setCurrentValue] = React.useState<string | null>(null)
+  const [lastPicked, setLastPicked] = React.useState<Option | null>(null)
   const didStartRef = React.useRef(false)
   const userSelectedRef = React.useRef(false)
   const [detectLoading, setDetectLoading] = React.useState(false)
   const [suggestions, setSuggestions] = React.useState<Option[]>([])
   const [suggestLoading, setSuggestLoading] = React.useState(false)
+
+  const sortOptions = React.useCallback((list: Option[]) => {
+    const coll = new Intl.Collator(typeof navigator !== "undefined" ? navigator.language : "en", { sensitivity: "base" })
+    return [...list].sort((a, b) => coll.compare(a.label, b.label))
+  }, [])
 
   React.useEffect(() => {
     if (value !== undefined) setInternalValue(value)
@@ -45,22 +51,13 @@ export function useLocationCombobox({
         const cached = JSON.parse(raw) as { label: string; value: string; timestamp: number }
         const isFresh = Date.now() - cached.timestamp < 60 * 60 * 1000
         if (cached?.value && cached?.label) {
-          setOpts((prev) => {
-            const norm = cached.label.toLowerCase().trim()
-            const existing = prev.find((o) => o.label.toLowerCase().trim() === norm)
-            if (existing) return prev
-            return [{ value: cached.value, label: cached.label }, ...prev]
-          })
+          setLastPicked({ value: cached.value, label: cached.label })
           setInternalValue((iv) => iv ?? cached.value)
           setCurrentValue((cv) => cv ?? cached.value)
           onChange?.(cached.value)
-          if (isFresh) {
-            // nothing else
-          }
         }
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Explicit detection
@@ -80,18 +77,7 @@ export function useLocationCombobox({
           const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
           const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
 
-          setOpts((prev) => {
-            const norm = label.toLowerCase().trim()
-            const existing = prev.find((o) => o.label.toLowerCase().trim() === norm)
-            if (existing) {
-              setCurrentValue(existing.value)
-              setInternalValue(existing.value)
-              onChange?.(existing.value)
-              return prev
-            }
-            const filtered = prev.filter((o) => o.value !== detectedValue)
-            return [{ value: detectedValue, label }, ...filtered]
-          })
+          setLastPicked({ value: detectedValue, label })
           setCurrentValue((cv) => cv ?? detectedValue)
           setInternalValue((iv) => iv ?? detectedValue)
           onChange?.(detectedValue)
@@ -117,7 +103,12 @@ export function useLocationCombobox({
     )
   }, [onChange])
 
-  const selected = opts.find((o) => o.value === internalValue) || null
+  const selected =
+    opts.find((o) => o.value === internalValue) ||
+    suggestions.find((o) => o.value === internalValue) ||
+    (lastPicked && lastPicked.value === internalValue ? lastPicked : null)
+
+  const selectedLabel: string | null = selected ? selected.label : null
 
   // Debounced suggestions (1s)
   React.useEffect(() => {
@@ -150,9 +141,21 @@ export function useLocationCombobox({
 
   const handleSelect = (val: string) => {
     userSelectedRef.current = true
+    const inSuggest = suggestions.find((s) => s.value === val)
+    if (inSuggest) {
+      setLastPicked(inSuggest)
+      try {
+        localStorage.setItem(
+          "locationCache",
+          JSON.stringify({ label: inSuggest.label, value: inSuggest.value, timestamp: Date.now() }),
+        )
+      } catch {}
+    }
     setInternalValue(val)
     setCurrentValue(val)
     onChange?.(val)
+    setSuggestions([])
+    setSearch("")
     setOpen(false)
   }
 
@@ -162,12 +165,15 @@ export function useLocationCombobox({
     const value = `custom_${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`
     setOpts((prev) => {
       if (prev.some((o) => o.value === value)) return prev
-      return [{ value, label: trimmed }, ...prev]
+      return sortOptions([{ value, label: trimmed }, ...prev])
     })
+    setLastPicked({ value, label: trimmed })
     userSelectedRef.current = true
     setInternalValue(value)
     setCurrentValue(value)
     onChange?.(value)
+    setSuggestions([])
+    setSearch("")
     setOpen(false)
   }
 
@@ -190,6 +196,7 @@ export function useLocationCombobox({
     suggestLoading,
     // derived
     selected,
+    selectedLabel: selected ? selected.label : null,
     // actions
     runDetection,
     handleSelect,
