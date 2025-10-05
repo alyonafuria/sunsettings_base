@@ -2,13 +2,21 @@ export type NominatimItem = {
   place_id: number
   display_name: string
   name?: string
-  address?: Record<string, any>
+  address?: {
+    city?: string
+    town?: string
+    village?: string
+    hamlet?: string
+    country?: string
+    country_code?: string
+    [key: string]: string | undefined
+  }
 }
 
 export type SuggestOption = { value: string; label: string }
 
 export function buildAcceptLanguage(): string {
-  const nav = typeof navigator !== "undefined" ? (navigator as any) : undefined
+  const nav = typeof navigator !== "undefined" ? navigator : undefined
   const docLang = typeof document !== "undefined" ? document.documentElement.lang : ""
   const langs = nav?.languages && nav.languages.length ? nav.languages.join(",") : nav?.language || "en"
   return (docLang || langs || "en").toString()

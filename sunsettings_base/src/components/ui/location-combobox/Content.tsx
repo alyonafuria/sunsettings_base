@@ -42,7 +42,7 @@ export function LocationComboboxContent({
         placeholder={error ? "Type your city..." : "Search locations..."}
         value={search}
         onValueChange={setSearch}
-        onKeyDown={(e: any) => {
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
           if (e.key === "Enter" && search.trim()) {
             e.preventDefault()
             onFreeform(search)
@@ -95,7 +95,7 @@ export function LocationComboboxContent({
               value={search}
               onSelect={() => onFreeform(search)}
             >
-              <span className="truncate">Use "{search}"</span>
+              <span className="truncate">Use &quot;{search}&quot;</span>
             </CommandItem>
           )}
           {opts.map((opt) => (

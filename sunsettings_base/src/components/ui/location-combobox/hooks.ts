@@ -77,7 +77,7 @@ export function useLocationCombobox({
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords
-          const lang = typeof navigator !== "undefined" && (navigator as any).language ? (navigator as any).language : "en"
+          const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
           const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
 
           setOpts((prev) => {
@@ -101,9 +101,9 @@ export function useLocationCombobox({
               JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
             )
           } catch {}
-        } catch (e: any) {
-          if (e?.name === "AbortError") setError("Reverse geocoding timed out")
-          else setError(e?.message || "Failed to detect location")
+        } catch (e: unknown) {
+          if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
+          else setError((e as Error)?.message || "Failed to detect location")
         } finally {
           clearTimeout(t)
           setDetectLoading(false)
@@ -134,8 +134,8 @@ export function useLocationCombobox({
         const acceptLang = buildAcceptLanguage()
         const mapped = await searchPlaces(q, { limit: 8, signal: controller.signal, lang: acceptLang })
         setSuggestions(mapped)
-      } catch (e) {
-        if ((e as any)?.name !== "AbortError") {
+      } catch (e: unknown) {
+        if (!(e instanceof DOMException && e.name === "AbortError")) {
           // ignore
         }
       } finally {
