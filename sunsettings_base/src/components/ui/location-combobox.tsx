@@ -1,31 +1,12 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-
-type Option = {
-  value: string
-  label: string
-}
-
-const DEFAULT_LOCATIONS: Option[] = [
-  { value: "new_york", label: "New York, USA" },
-  { value: "san_francisco", label: "San Francisco, USA" },
-  { value: "london", label: "London, UK" },
-  { value: "paris", label: "Paris, France" },
-  { value: "berlin", label: "Berlin, Germany" },
-  { value: "tokyo", label: "Tokyo, Japan" },
-  { value: "sydney", label: "Sydney, Australia" },
-]
+import type { Option } from "./location-combobox/types"
+import { DEFAULT_LOCATIONS } from "./location-combobox/constants"
+import { useLocationCombobox } from "./location-combobox/hooks"
 
 export function LocationCombobox({
   options = DEFAULT_LOCATIONS,
@@ -39,21 +20,42 @@ export function LocationCombobox({
   onChange?: (value: string) => void
   placeholder?: string
   className?: string
-}) {
-  const [open, setOpen] = React.useState(false)
-  const [internalValue, setInternalValue] = React.useState<string | null>(value ?? null)
+}): React.JSX.Element {
+  const {
+    open,
+    setOpen,
+    opts,
+    error,
+    search,
+    setSearch,
+    currentValue,
+    detectLoading,
+    suggestions,
+    suggestLoading,
+    selected,
+    runDetection,
+    handleSelect,
+    handleFreeform,
+    prefetchDropdown,
+  } = useLocationCombobox({ options, value, onChange })
 
-  React.useEffect(() => {
-    if (value !== undefined) setInternalValue(value)
-  }, [value])
+  // Lazy-load the heavy dropdown content only when needed
+  const LazyContent = React.useMemo(
+    () =>
+      dynamic(() => import("@/components/ui/location-combobox/Content").then((m) => m.LocationComboboxContent), {
+        ssr: false,
+        loading: () => (
+          <div className="p-3 w-80">
+            <div className="h-8 bg-white/10 rounded mb-2" />
+            <div className="h-8 bg-white/10 rounded mb-2" />
+            <div className="h-8 bg-white/10 rounded" />
+          </div>
+        ),
+      }),
+    [],
+  )
 
-  const selected = options.find((o) => o.value === internalValue)
-
-  const handleSelect = (val: string) => {
-    setInternalValue(val)
-    onChange?.(val)
-    setOpen(false)
-  }
+  // detection will be triggered explicitly by a menu item
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,32 +67,54 @@ export function LocationCombobox({
             "shadow-shadow transition-colors",
             className,
           )}
+          onMouseEnter={prefetchDropdown}
+          onFocus={prefetchDropdown}
+          onTouchStart={prefetchDropdown}
         >
           <span className="truncate">
-            {selected ? selected.label : placeholder}
+            {detectLoading ? "Detecting location..." : selected ? selected.label : placeholder}
           </span>
-          <span aria-hidden className="opacity-60">▾</span>
+          {detectLoading ? (
+            <span
+              className="inline-block size-4 border-2 border-main-foreground/40 border-t-main-foreground rounded-full animate-spin"
+              aria-label="Loading"
+            />
+          ) : (
+            <span aria-hidden className="opacity-80 shrink-0 inline-flex items-center justify-center">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-5 h-5"
+                aria-hidden
+              >
+                <path d="M7 10l5 5 5-5z" />
+              </svg>
+            </span>
+          )}
         </button>
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="center" sideOffset={8} avoidCollisions={false} className="p-0 w-80">
-        <Command>
-          <CommandInput placeholder="Search locations..." />
-          <CommandList>
-            <CommandEmpty>No locations found.</CommandEmpty>
-            <CommandGroup heading="Locations">
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt.value}
-                  value={opt.label}
-                  onSelect={() => handleSelect(opt.value)}
-                  className={cn(internalValue === opt.value && "aria-selected:outline-2")}
-                >
-                  <span className="truncate">{opt.label}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+      <PopoverContent
+        side="bottom"
+        align="center"
+        sideOffset={8}
+        avoidCollisions={false}
+        className="p-0 w-80 border-0 shadow-none overflow-hidden bg-background"
+      >
+        {open ? (
+          <LazyContent
+            opts={opts}
+            error={error}
+            search={search}
+            setSearch={setSearch}
+            onSelectValue={handleSelect}
+            onFreeform={handleFreeform}
+            detectLoading={detectLoading}
+            runDetection={runDetection}
+            currentValue={currentValue}
+            suggestions={suggestions}
+            suggestLoading={suggestLoading}
+          />
+        ) : null}
       </PopoverContent>
     </Popover>
   )
