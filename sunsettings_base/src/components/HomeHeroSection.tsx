@@ -55,6 +55,8 @@ export default function HomeHeroSection() {
     }
   }, [])
 
+  const canCalculate = lat != null && lon != null
+
   return (
     <div
       className={cn(
@@ -76,7 +78,12 @@ export default function HomeHeroSection() {
           variant="default"
           size="lg"
           className="w-40"
-          onClick={() => router.push("/map")}
+          disabled={!canCalculate}
+          onClick={() => {
+            if (!canCalculate) return
+            const z = 11
+            router.push(`/map?lat=${lat}&lon=${lon}&zoom=${z}`)
+          }}
         >
           <h2>Calculate</h2>
         </Button>

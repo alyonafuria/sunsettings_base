@@ -58,6 +58,8 @@ export function useLocationCombobox({
           setInternalValue((iv) => iv ?? cached.value)
           setCurrentValue((cv) => cv ?? cached.value)
           onChange?.(cached.value)
+          // Also resolve coordinates by cached label so downstream can act immediately (e.g., enable Calculate)
+          try { onResolveCoords?.(cached.label) } catch {}
         }
       }
     } catch {}
@@ -163,6 +165,14 @@ export function useLocationCombobox({
     if (!inSuggest) {
       const inOpts = opts.find((o) => o.value === val)
       if (inOpts) {
+        // Persist default option selections too, so it becomes the new last-picked
+        setLastPicked(inOpts)
+        try {
+          localStorage.setItem(
+            "locationCache",
+            JSON.stringify({ label: inOpts.label, value: inOpts.value, timestamp: Date.now() }),
+          )
+        } catch {}
         try { onResolveCoords?.(inOpts.label) } catch {}
       }
     }
