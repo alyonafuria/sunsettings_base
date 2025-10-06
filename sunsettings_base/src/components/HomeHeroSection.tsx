@@ -5,7 +5,6 @@ import { Alert, AlertTitle } from "@/components/ui/alert"
 import { LocationCombobox } from "@/components/ui/location-combobox"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import Weather from "@/components/weather/Weather"
 import { resolveCoordsFromValue, resolveCoordsByLabel } from "@/components/weather/coords"
 import { useRouter } from "next/navigation"
 
@@ -87,7 +86,6 @@ export default function HomeHeroSection() {
         >
           <h2>Calculate</h2>
         </Button>
-        <Weather lat={lat ?? undefined} lon={lon ?? undefined} />
       </div>
     </div>
   )
