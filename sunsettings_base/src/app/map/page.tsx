@@ -3,6 +3,7 @@
 import MapCanvas from "@/components/map/MapCanvas"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import MapAnalysisOverlay from "@/components/ai/MapAnalysisOverlay"
 
 function MapPageInner() {
   const sp = useSearchParams()
@@ -17,7 +18,12 @@ function MapPageInner() {
   const hasCenter = typeof lat === "number" && !Number.isNaN(lat) && typeof lon === "number" && !Number.isNaN(lon)
   const center = hasCenter ? { lat: lat as number, lon: lon as number } : undefined
 
-  return <MapCanvas center={center} zoom={zoom} />
+  return (
+    <>
+      <MapCanvas center={center} zoom={zoom} />
+      <MapAnalysisOverlay />
+    </>
+  )
 }
 
 export default function MapPage() {

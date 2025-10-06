@@ -63,7 +63,7 @@ export function useLocationCombobox({
         }
       }
     } catch {}
-  }, [onChange])
+  }, [onChange, onResolveCoords])
 
   // Explicit detection
   const runDetection = React.useCallback(() => {

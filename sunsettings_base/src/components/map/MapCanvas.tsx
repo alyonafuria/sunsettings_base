@@ -17,6 +17,7 @@ export default function MapCanvas({
   const mapRef = React.useRef<mapboxgl.Map | null>(null)
   const [/*errorMsg*/, setErrorMsg] = React.useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     let cancelled = false
 
