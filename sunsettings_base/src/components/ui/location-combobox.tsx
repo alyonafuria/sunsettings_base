@@ -15,6 +15,8 @@ export function LocationCombobox({
   placeholder = "Choose your location",
   className,
   onOpenChange,
+  onDetectedCoords,
+  onResolveCoords,
 }: {
   options?: Option[]
   value?: string | null
@@ -22,6 +24,8 @@ export function LocationCombobox({
   placeholder?: string
   className?: string
   onOpenChange?: (open: boolean) => void
+  onDetectedCoords?: (lat: number, lon: number) => void
+  onResolveCoords?: (label: string) => void
 }): React.JSX.Element {
   const {
     open,
@@ -39,7 +43,7 @@ export function LocationCombobox({
     handleSelect,
     handleFreeform,
     prefetchDropdown,
-  } = useLocationCombobox({ options, value, onChange })
+  } = useLocationCombobox({ options, value, onChange, onDetectedCoords, onResolveCoords })
 
   // Lazy-load the heavy dropdown content only when needed
   const LazyContent = React.useMemo(
@@ -64,7 +68,7 @@ export function LocationCombobox({
       setOpen(v)
       onOpenChange?.(v)
     },
-    [onOpenChange],
+    [onOpenChange, setOpen],
   )
 
   return (
