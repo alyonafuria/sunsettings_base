@@ -61,6 +61,7 @@ export function LocationCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          key={currentValue ?? "__none__"}
           type="button"
           className={cn(
             "inline-flex items-center justify-between gap-2 h-12 px-4 border-2 border-border bg-main text-main-foreground rounded-base font-heading overflow-hidden",

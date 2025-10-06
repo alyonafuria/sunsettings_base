@@ -29,6 +29,10 @@ export default function Home() {
 
       {/* Positioned at 1/4 of the screen height */}
       <div className="absolute left-1/2 top-[25%] -translate-x-1/2 z-10">
+      <div className="flex flex-col gap-4">
+        <h2>Calculate the beauty of the sunset</h2>
+        <p>Just choose your location</p>
+      </div>
         <LocationComboboxClient />
       </div>
     </div>

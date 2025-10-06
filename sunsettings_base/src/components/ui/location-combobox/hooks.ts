@@ -62,13 +62,13 @@ export function useLocationCombobox({
   // Explicit detection
   const runDetection = React.useCallback(() => {
     if (!("geolocation" in navigator)) {
-      setError("Geolocation not supported")
       return
     }
     setDetectLoading(true)
     setError(null)
     const controller = new AbortController()
-    const t = setTimeout(() => controller.abort(), 2500)
+    // Allow more time for reverse geocoding to respond over the network
+    const t = setTimeout(() => controller.abort(), 12000)
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
@@ -77,15 +77,19 @@ export function useLocationCombobox({
           const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
 
           setLastPicked({ value: detectedValue, label })
-          setCurrentValue((cv) => cv ?? detectedValue)
-          setInternalValue((iv) => iv ?? detectedValue)
+          // Force-update to the newly detected value so the trigger reflects it immediately
+          setCurrentValue(detectedValue)
+          setInternalValue(detectedValue)
           onChange?.(detectedValue)
+          // persist for refresh and immediate display consistency
           try {
             localStorage.setItem(
               "locationCache",
               JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
             )
           } catch {}
+          // close popover to reveal updated selection on the trigger (defer to next tick)
+          setTimeout(() => setOpen(false), 0)
         } catch (e: unknown) {
           if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
           else setError((e as Error)?.message || "Failed to detect location")
@@ -98,13 +102,13 @@ export function useLocationCombobox({
         setError(err.message || "Location permission denied")
         setDetectLoading(false)
       },
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 30 * 60 * 1000 },
+      // Give the browser more time to resolve the current position
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 30 * 60 * 1000 },
     )
   }, [onChange])
 
   const selected =
     opts.find((o) => o.value === internalValue) ||
-    suggestions.find((o) => o.value === internalValue) ||
     (lastPicked && lastPicked.value === internalValue ? lastPicked : null)
 
   // Debounced suggestions (1s)
