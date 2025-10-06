@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import Weather from "@/components/weather/Weather"
 import { resolveCoordsFromValue, resolveCoordsByLabel } from "@/components/weather/coords"
+import { useRouter } from "next/navigation"
 
 export default function HomeHeroSection() {
   const [pinnedTop, setPinnedTop] = React.useState(false)
   const hasOpenedRef = React.useRef(false)
   const [lat, setLat] = React.useState<number | null>(null)
   const [lon, setLon] = React.useState<number | null>(null)
+  const router = useRouter()
 
   const handleOpenChange = React.useCallback((open: boolean) => {
     // Move to top when user opens the combobox; drop back when they close without choosing
@@ -70,7 +72,14 @@ export default function HomeHeroSection() {
           onDetectedCoords={handleDetectedCoords}
           onResolveCoords={handleResolveByLabel}
         />
-        <Button variant="default" size="lg" className="w-40"><h2>Calculate</h2></Button>
+        <Button
+          variant="default"
+          size="lg"
+          className="w-40"
+          onClick={() => router.push("/map")}
+        >
+          <h2>Calculate</h2>
+        </Button>
         <Weather lat={lat ?? undefined} lon={lon ?? undefined} />
       </div>
     </div>

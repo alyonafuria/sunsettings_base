@@ -2,11 +2,11 @@ import HomeHeroSection from "@/components/HomeHeroSection";
 
 export default function Home() {
   return (
-    <div className="relative h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
+    <div className="relative top-16 h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
       {/* CSS-only background grid (replaces heavy Tiles component) */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
+        className="pointer-events-none fixed top-16 inset-0 -z-10"
         style={{
           backgroundImage: `
             repeating-linear-gradient(
