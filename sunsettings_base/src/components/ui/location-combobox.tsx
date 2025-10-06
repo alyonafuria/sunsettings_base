@@ -14,12 +14,14 @@ export function LocationCombobox({
   onChange,
   placeholder = "Choose your location",
   className,
+  onOpenChange,
 }: {
   options?: Option[]
   value?: string | null
   onChange?: (value: string) => void
   placeholder?: string
   className?: string
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const {
     open,
@@ -57,8 +59,16 @@ export function LocationCombobox({
 
   // detection will be triggered explicitly by a menu item
 
+  const handleOpenChange = React.useCallback(
+    (v: boolean) => {
+      setOpen(v)
+      onOpenChange?.(v)
+    },
+    [onOpenChange],
+  )
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           key={currentValue ?? "__none__"}
