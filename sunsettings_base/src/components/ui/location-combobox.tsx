@@ -74,7 +74,7 @@ export function LocationCombobox({
           key={currentValue ?? "__none__"}
           type="button"
           className={cn(
-            "inline-flex items-center justify-between gap-2 h-12 px-4 border-2 border-border bg-main text-main-foreground rounded-base font-heading overflow-hidden",
+            "inline-flex items-center justify-between gap-2 h-12 px-4 border-2 border-border bg-main text-main-foreground rounded-base overflow-hidden",
             // Responsive fixed widths
             "w-[90vw] max-w-[90vw] md:w-[30vw] md:max-w-[30vw]",
             "shadow-shadow transition-colors",

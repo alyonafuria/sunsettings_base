@@ -4,6 +4,7 @@ import * as React from "react"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { LocationCombobox } from "@/components/ui/location-combobox"
 import { cn } from "@/lib/utils"
+import { Button, buttonVariants } from "@/components/ui/button"
 
 export default function HomeHeroSection() {
   const [pinnedTop, setPinnedTop] = React.useState(false)
@@ -34,11 +35,12 @@ export default function HomeHeroSection() {
         pinnedTop ? "top-4" : "top-[25%]",
       )}
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 items-center">
         <Alert className="bg-white text-black text-center">
           <AlertTitle className="justify-self-center">Calculate the beauty of the sunset</AlertTitle>
         </Alert>
         <LocationCombobox onOpenChange={handleOpenChange} onChange={handleChange} />
+        <Button variant="default" size="lg" className="w-80"><h2>Calculate</h2></Button>
       </div>
     </div>
   )

@@ -27,7 +27,7 @@ export default function Home() {
         }}
       />
 
-      {/* Hero section (alert + combobox) that moves to top on open/selection */}
+      {/* Hero section (alert, combobox, button) that moves to top on open/selection */}
       <HomeHeroSection />
     </div>
   );
