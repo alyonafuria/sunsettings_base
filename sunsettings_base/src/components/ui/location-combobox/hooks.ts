@@ -9,10 +9,14 @@ export function useLocationCombobox({
   options,
   value,
   onChange,
+  onDetectedCoords,
+  onResolveCoords,
 }: {
   options: Option[]
   value?: string | null
   onChange?: (value: string) => void
+  onDetectedCoords?: (lat: number, lon: number) => void
+  onResolveCoords?: (label: string) => void
 }) {
   const [open, setOpen] = React.useState(false)
   const [internalValue, setInternalValue] = React.useState<string | null>(value ?? null)
@@ -81,6 +85,8 @@ export function useLocationCombobox({
           setCurrentValue(detectedValue)
           setInternalValue(detectedValue)
           onChange?.(detectedValue)
+          // Inform listeners of detected coordinates
+          try { onDetectedCoords?.(latitude, longitude) } catch {}
           // persist for refresh and immediate display consistency
           try {
             localStorage.setItem(
@@ -105,7 +111,7 @@ export function useLocationCombobox({
       // Give the browser more time to resolve the current position
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 30 * 60 * 1000 },
     )
-  }, [onChange])
+  }, [onChange, onDetectedCoords])
 
   const selected =
     opts.find((o) => o.value === internalValue) ||
@@ -151,6 +157,14 @@ export function useLocationCombobox({
           JSON.stringify({ label: inSuggest.label, value: inSuggest.value, timestamp: Date.now() }),
         )
       } catch {}
+      // Ask parent to resolve coordinates by label for suggestions
+      try { onResolveCoords?.(inSuggest.label) } catch {}
+    }
+    if (!inSuggest) {
+      const inOpts = opts.find((o) => o.value === val)
+      if (inOpts) {
+        try { onResolveCoords?.(inOpts.label) } catch {}
+      }
     }
     setInternalValue(val)
     setCurrentValue(val)
@@ -173,6 +187,8 @@ export function useLocationCombobox({
     setInternalValue(value)
     setCurrentValue(value)
     onChange?.(value)
+    // Ask parent to resolve coordinates by label for freeform
+    try { onResolveCoords?.(trimmed) } catch {}
     setSuggestions([])
     setSearch("")
     setOpen(false)
