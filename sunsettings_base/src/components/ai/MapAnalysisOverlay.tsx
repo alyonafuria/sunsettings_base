@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import FlipCard from "@/components/ai/FlipCard"
+import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
 
 function buildLocationLabelFromCache(): string | null {
   if (typeof window === "undefined") return null
@@ -24,6 +25,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const [probability, setProbability] = React.useState<number | null>(null)
   const [description, setDescription] = React.useState<string>("")
   const [locationLabel, setLocationLabel] = React.useState<string>("")
+  const [cardForceClosed, setCardForceClosed] = React.useState(false)
 
   // Derive lat/lon from URL for display fallback
   const latStr = sp.get("lat")
@@ -141,21 +143,39 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
-
   if (!visible) return <></>
 
   return (
     <div
       className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 w-[min(92vw,640px)]"
-      style={{ bottom: "15vh" }}
+      style={{ bottom: "10vh" }}
     >
-      <div className="pointer-events-auto">
+      <div className="pointer-events-auto space-y-3">
         <FlipCard
           location={locationLabel}
           probability={probability}
           description={description}
           loading={loading}
           error={error}
+          forceClosed={cardForceClosed}
+        />
+        <UploadPhotoPanel
+          locationLabel={locationLabel}
+          coords={{ lat: latNum, lon: lonNum }}
+          scoreLabel={(function(){
+            const p = typeof probability === "number" ? probability : null
+            if (p === null) return undefined
+            if (p <= 30) return "Horrible"
+            if (p <= 50) return "Poor"
+            if (p <= 70) return "Okay"
+            if (p <= 90) return "Great"
+            return "Fabulous"
+          })()}
+          scorePercent={typeof probability === "number" ? probability : undefined}
+          onOpenPicker={() => setCardForceClosed(true)}
+          onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
+          onUploaded={() => setCardForceClosed(true)}
+          onReset={() => setCardForceClosed(false)}
         />
       </div>
     </div>
