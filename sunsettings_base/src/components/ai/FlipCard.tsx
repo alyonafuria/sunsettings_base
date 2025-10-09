@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Card } from "@/components/ui/card"
+import { Minimize2 } from "lucide-react"
 
 export interface FlipCardProps {
   location: string
@@ -37,6 +38,7 @@ export default function FlipCard({
   }
   const innerStyle: React.CSSProperties = {
     transformStyle: "preserve-3d",
+    WebkitTransformStyle: "preserve-3d",
     transform: isFlipped ? "rotateY(180deg)" : undefined,
     transition: "transform 500ms",
     willChange: "transform",
@@ -48,6 +50,7 @@ export default function FlipCard({
   const faceStyle: React.CSSProperties = {
     backfaceVisibility: "hidden",
     WebkitBackfaceVisibility: "hidden",
+    transform: "translateZ(0)",
     position: "absolute",
     inset: 0,
     width: "100%",
@@ -105,21 +108,21 @@ export default function FlipCard({
         style={innerStyle}
         className={["transition-transform duration-200", isClosed ? "scale-75" : "scale-100"].join(" ")}
       >
+        {/* Maximize button removed per design */}
         {/* Front */}
-        <div style={faceStyle}>
+        <div style={{ ...faceStyle, pointerEvents: isFlipped ? "none" : undefined }}>
           <Card className="relative w-full h-full px-6 py-9 flex flex-col justify-center items-center">
-            {!isClosed && (
+            {!isClosed && !isFlipped && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleClose(e)
                 }}
                 className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
+                style={{ opacity: isFlipped ? 0 : 1, transition: "opacity 150ms" }}
                 aria-label="Close card"
               >
-                <svg className="w-6 h-6 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Minimize2 className="w-6 h-6 md:w-6 md:h-6" />
               </button>
             )}
             <div className="text-center">
@@ -163,20 +166,19 @@ export default function FlipCard({
         </div>
 
         {/* Back */}
-        <div style={{ ...faceStyle, transform: "rotateY(180deg)" }}>
+        <div style={{ ...faceStyle, transform: "rotateY(180deg)", pointerEvents: isFlipped ? undefined : "none" }}>
           <Card className="relative w-full h-full p-6 flex flex-col justify-center">
-            {!isClosed && (
+            {!isClosed && isFlipped && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleClose(e)
                 }}
                 className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
+                style={{ opacity: isFlipped ? 1 : 0, transition: "opacity 150ms" }}
                 aria-label="Close card"
               >
-                <svg className="w-6 h-6 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Minimize2 className="w-6 h-6 md:w-6 md:h-6" />
               </button>
             )}
             <div className="text-sm leading-relaxed opacity-95">
