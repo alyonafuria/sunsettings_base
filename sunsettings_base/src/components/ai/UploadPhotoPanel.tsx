@@ -2,12 +2,25 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import ImageCard from "@/components/ui/image-card"
 import { Slider } from "@/components/ui/slider"
+import Image from "next/image"
+import { HelpCircle } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { parseGpsFromFile, parseTakenAtFromFile } from "@/lib/exif"
+import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3"
 
 export default function UploadPhotoPanel({
   locationLabel,
-  coords,
   scoreLabel,
   scorePercent,
   onUploadingChange,
@@ -33,6 +46,12 @@ export default function UploadPhotoPanel({
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
   const [userDecision, setUserDecision] = React.useState<"yes" | "no" | null>(null)
   const [userScore, setUserScore] = React.useState<number | null>(null)
+  const [photoH3Index, setPhotoH3Index] = React.useState<string | null>(null)
+  const [photoCellCenter, setPhotoCellCenter] = React.useState<{ lat: number; lon: number } | null>(null)
+  const [photoLocationLabel, setPhotoLocationLabel] = React.useState<string | null>(null)
+  const [labelLoading, setLabelLoading] = React.useState(false)
+  const [takenAtIso, setTakenAtIso] = React.useState<string | null>(null)
+  const [exifDialogDismissed, setExifDialogDismissed] = React.useState(false)
 
   const resetUpload = () => {
     setFile(null)
@@ -60,12 +79,56 @@ export default function UploadPhotoPanel({
       // default: wait for user decision; reset prior choices
       setUserDecision(null)
       setUserScore(null)
-      // reset any previous slider state
+      // derive photo location from EXIF -> H3 -> reverse geocode
+      ;(async () => {
+        setPhotoH3Index(null)
+        setPhotoCellCenter(null)
+        setPhotoLocationLabel(null)
+        setTakenAtIso(null)
+        try {
+          const [gps, taken] = await Promise.all([
+            parseGpsFromFile(f),
+            parseTakenAtFromFile(f),
+          ])
+          if (taken) setTakenAtIso(taken)
+          if (gps) {
+            const h3 = toH3(gps.lat, gps.lon, DEFAULT_H3_RES)
+            const center = centerOf(h3)
+            setPhotoH3Index(h3)
+            setPhotoCellCenter(center)
+            // reverse geocode center via our API
+            setLabelLoading(true)
+            try {
+              const res = await fetch("/api/geocode/reverse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ lat: center.lat, lon: center.lon }),
+              })
+              if (res.ok) {
+                const data = await res.json()
+                if (data?.label) setPhotoLocationLabel(data.label)
+                else setPhotoLocationLabel(null)
+              } else {
+                setPhotoLocationLabel(null)
+              }
+            } finally {
+              setLabelLoading(false)
+            }
+          } else {
+            setPhotoLocationLabel(null)
+          }
+        } catch {
+          setPhotoLocationLabel(null)
+        }
+      })()
     } else {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       setPreviewUrl(null)
       setUserDecision(null)
       setUserScore(null)
+      setPhotoH3Index(null)
+      setPhotoCellCenter(null)
+      setPhotoLocationLabel(null)
     }
   }
 
@@ -90,7 +153,7 @@ export default function UploadPhotoPanel({
             }}
             disabled={uploading}
           >
-            Add photo
+            <span>Add photo</span>
           </Button>
         </div>
         {error && <div className="text-xs text-center">{error}</div>}
@@ -98,78 +161,137 @@ export default function UploadPhotoPanel({
     )
   }
 
-  // When a file is chosen, show just the image card-style figure with caption below it (no parent Card wrapper)
-  if (file && previewUrl) {
+  // File chosen or uploaded: show Card wrapper with image (preview or uploaded), caption, and badge
+  if (file || photoCid) {
+    const imgUrl = photoCid ? `https://tan-mad-gorilla-689.mypinata.cloud/ipfs/${photoCid}` : null
+    const imageSrc = photoCid ? imgUrl! : (previewUrl || "")
+    const unoptimized = true
+    const hasExif = Boolean(photoH3Index)
+    const displayLabel = hasExif
+      ? (photoLocationLabel || (labelLoading ? "Resolving location…" : null))
+      : (labelLoading ? "Resolving location…" : "Can't read photo location")
     return (
-      <>
-        <figure className="mx-auto w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
+      <div className="mx-auto flex flex-col items-center gap-3">
+        <figure className="w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
           <div className="relative">
-            <img src={previewUrl} alt="preview" className="w-full aspect-4/3 object-cover" />
-            {locationLabel && (
-              <div className="absolute top-2 left-2 text-[11px] px-2 py-1 bg-white text-black border-2 border-black">
-                {locationLabel}
-              </div>
+            <div className="relative w-full aspect-[4/3]">
+              <Image src={imageSrc} alt={photoCid ? "uploaded" : "preview"} fill sizes="300px" className="object-cover" unoptimized={unoptimized} />
+            </div>
+            {displayLabel && (
+              hasExif ? (
+                <div className="absolute top-2 left-2 text-[11px] px-2 py-1 bg-white text-black border-2 border-black">
+                  {displayLabel}
+                </div>
+              ) : (
+                <div className="absolute top-2 left-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="flex items-center gap-1 text-[11px] px-2 py-1 bg-white text-black border-2 border-black">
+                        <span>{displayLabel}</span>
+                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Why we can&apos;t read photo location</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          We couldn&apos;t find GPS EXIF data in your photo. This can happen if:
+                          <br />
+                          • The image was edited or exported and EXIF was removed.
+                          <br />
+                          • The photo is a screenshot (screenshots have no EXIF).
+                          <br />
+                          • Messaging apps removed metadata when sharing.
+                          <br />
+                          • Camera location services were disabled.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setExifDialogDismissed(true)}>Close</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => { setExifDialogDismissed(false); resetUpload() }}>Upload new photo</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )
             )}
           </div>
           <figcaption className="border-t-2 text-main-foreground border-border p-4">
-            {typeof scorePercent === "number" && (
-              <div className="text-center space-y-2">
-                <div className="text-sm">Agree with the score?</div>
-                <div className="flex justify-center gap-2">
-                  <Button
-                    type="button"
-                    variant={userDecision === "yes" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("yes")
-                      setUserScore(scorePercent ?? null)
-                    }}
-                  >
-                    Yes
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={userDecision === "no" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("no")
-                      setUserScore(null)
-                      // no-op
-                    }}
-                  >
-                    No
-                  </Button>
+              {uploading ? (
+                <div className="text-center py-2">
+                  <div className="text-sm">Uploading…</div>
                 </div>
+              ) : metaCid ? (
+                <div className="text-center py-2">
+                  <div className="text-sm">Photo uploaded successfully</div>
+                </div>
+              ) : (
+                typeof scorePercent === "number" && (
+                  <div className="text-center space-y-2">
+                    <div className="text-sm">Agree with the score?</div>
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant={userDecision === "yes" ? "default" : "neutral"}
+                        onClick={() => {
+                          setUserDecision("yes")
+                          setUserScore(scorePercent ?? null)
+                        }}
+                        disabled={uploading}
+                      >
+                        <span>Yes</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={userDecision === "no" ? "default" : "neutral"}
+                        onClick={() => {
+                          setUserDecision("no")
+                          setUserScore(null)
+                          // no-op
+                        }}
+                        disabled={uploading}
+                      >
+                        <span>No</span>
+                      </Button>
+                    </div>
 
-                {userDecision === "no" && (
-                  <div className="pt-1">
-                    <div className="text-xs mb-1 opacity-80">Adjust your score</div>
-                    <Slider
-                      defaultValue={[typeof scorePercent === "number" ? scorePercent : 50]}
-                      max={100}
-                      step={1}
-                      onValueChange={(vals) => {
-                        setUserScore(vals?.[0] ?? null)
-                        // no-op
-                      }}
-                    />
-                    <div className="mt-1 text-xs">Your score: {typeof userScore === "number" ? `${userScore}%` : "—"}</div>
+                    {userDecision === "no" && (
+                      <div className="pt-1">
+                        <div className="text-xs mb-1 opacity-80">Adjust your score</div>
+                        <Slider
+                          defaultValue={[typeof scorePercent === "number" ? scorePercent : 50]}
+                          max={100}
+                          step={1}
+                          onValueChange={(vals) => {
+                            setUserScore(vals?.[0] ?? null)
+                            // no-op
+                          }}
+                          // slider stays interactive until submit
+                        />
+                        <div className="mt-1 text-xs">Your score: {typeof userScore === "number" ? `${userScore}%` : "—"}</div>
+                      </div>
+                    )}
+                    <div className="pt-2 flex justify-center">
+                      <Button type="button" onClick={onUpload} disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}>
+                        {uploading ? "Submitting…" : "Submit"}
+                      </Button>
+                    </div>
                   </div>
-                )}
-                <div className="pt-2 flex justify-center">
-                  <Button type="button" onClick={onUpload} disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}>
-                    {uploading ? "Submitting…" : "Submit"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </figcaption>
-        </figure>
-        {error && <div className="text-xs">{error}</div>}
-      </>
+                )
+              )}
+            </figcaption>
+          </figure>
+          {error && <div className="text-xs">{error}</div>}
+          {photoCid && (
+            <div className="mt-2">
+              <Button type="button" onClick={resetUpload}>Upload new photo</Button>
+            </div>
+          )}
+        </div>
     )
   }
 
-  
-
+  // Upload handler
   async function onUpload() {
     if (!file) return
     setUploading(true)
@@ -179,7 +301,12 @@ export default function UploadPhotoPanel({
       // 1) upload file
       const fd = new FormData()
       fd.append("file", file)
-      fd.append("name", `sunsettings_photo_${Date.now()}`)
+      // build a descriptive name: sunsettings_<takenAt>_<h3index or noh3>
+      const fallbackTaken = new Date(file.lastModified).toISOString()
+      const taken = takenAtIso || fallbackTaken
+      const safeTaken = taken.replace(/[:.]/g, "-")
+      const nameBase = `sunsettings_${safeTaken}_${photoH3Index || "noh3"}`
+      fd.append("name", nameBase)
       console.debug("[upload] sending file", { name: file.name, size: file.size, type: file.type })
       // pass score/location to server so it can be stored in Pinata metadata keyvalues
       if (typeof scorePercent === "number") fd.append("scorePercent", String(scorePercent))
@@ -206,27 +333,30 @@ export default function UploadPhotoPanel({
 
       // 2) upload metadata JSON
       const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
+      const hasExifNow = Boolean(photoH3Index)
+      const locationLabelForMeta = hasExifNow
+        ? (photoLocationLabel || null)
+        : (exifDialogDismissed ? "" : null)
       const metadata = {
         walletAddress: "", // TODO: fill when wallet integration is ready
         photoCid: upJson.cid,
         // flat fields requested
-        locationLabel: locationLabel || "",
+        photoLocationLabel: locationLabelForMeta,
+        photoH3Index: photoH3Index || null,
+        photoCellCenterLat: photoCellCenter?.lat ?? null,
+        photoCellCenterLon: photoCellCenter?.lon ?? null,
         sunsetScorePercent: typeof scorePercent === "number" ? scorePercent : null,
         sunsetScoreLabel: scoreLabel || null,
         userSunsetScorePercent: typeof userScore === "number" ? userScore : null,
         photoCreatedAt,
         // keep structured location too
-        location: {
-          label: locationLabel || "",
-          lat: typeof coords?.lat === "number" ? coords?.lat : null,
-          lon: typeof coords?.lon === "number" ? coords?.lon : null,
-        },
+        location: null,
         createdAt: new Date().toISOString(),
       }
       const meta = await fetch("/api/pinata/upload-json", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: metadata, name: `sunsettings_meta_${Date.now()}` }),
+        body: JSON.stringify({ data: metadata, name: `${nameBase}_meta_${upJson.cid}` }),
       })
       type UploadJsonResponse = { cid?: string; ok?: boolean; error?: string }
       let metaJson: UploadJsonResponse | null = null
@@ -257,17 +387,6 @@ export default function UploadPhotoPanel({
       setUploading(false)
       onUploadingChange?.(false)
     }
-  }
-
-  if (photoCid) {
-    const imgUrl = `https://gateway.pinata.cloud/ipfs/${photoCid}`
-    return (
-      <div className="mx-auto flex flex-col items-center gap-3">
-        <ImageCard imageUrl={imgUrl} caption={"Photo uploaded successfully"} />
-        <Button type="button" onClick={resetUpload}>Upload new photo</Button>
-        {error && <div className="text-xs">{error}</div>}
-      </div>
-    )
   }
 
   return null

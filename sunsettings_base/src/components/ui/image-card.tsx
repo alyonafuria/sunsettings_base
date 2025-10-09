@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 type Props = {
   imageUrl: string
@@ -14,7 +15,15 @@ export default function ImageCard({ imageUrl, caption, className }: Props) {
         className,
       )}
     >
-      <img className="w-full aspect-4/3 object-cover" src={imageUrl} alt="image" />
+      <div className="relative w-full aspect-[4/3]">
+        <Image
+          src={imageUrl}
+          alt="image"
+          fill
+          sizes="(max-width: 768px) 250px, 250px"
+          className="object-cover"
+        />
+      </div>
       <figcaption className="border-t-2 text-main-foreground border-border p-4">
         {caption}
       </figcaption>
