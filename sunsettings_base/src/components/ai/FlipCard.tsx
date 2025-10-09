@@ -12,6 +12,7 @@ export interface FlipCardProps {
   error?: string | null
   className?: string
   forceClosed?: boolean
+  closeSignal?: number
 }
 
 export default function FlipCard({
@@ -22,11 +23,13 @@ export default function FlipCard({
   error,
   className,
   forceClosed,
+  closeSignal,
 }: FlipCardProps) {
   const [isFlipped, setIsFlipped] = React.useState(false)
   const [isClosed, setIsClosed] = React.useState(false)
   const [date] = React.useState(() => new Date())
   const [showContent, setShowContent] = React.useState(true)
+  const lastCloseSignal = React.useRef(closeSignal)
 
 
   const formattedDate = React.useMemo(() => date.toLocaleDateString("de-DE"), [date])
@@ -93,6 +96,15 @@ export default function FlipCard({
       }
     }
   }, [forceClosed])
+
+  React.useEffect(() => {
+    if (closeSignal === undefined) return
+    if (lastCloseSignal.current === closeSignal) return
+    lastCloseSignal.current = closeSignal
+    setShowContent(false)
+    setIsClosed(true)
+    setIsFlipped(false)
+  }, [closeSignal])
 
   return (
     <div

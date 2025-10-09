@@ -27,6 +27,7 @@ export default function UploadPhotoPanel({
   onUploaded,
   onReset,
   onOpenPicker,
+  onCloseRequested,
 }: {
   locationLabel: string
   coords?: { lat?: number; lon?: number }
@@ -36,6 +37,7 @@ export default function UploadPhotoPanel({
   onUploaded?: (cid: string) => void
   onReset?: () => void
   onOpenPicker?: () => void
+  onCloseRequested?: () => void
 }) {
   const [file, setFile] = React.useState<File | null>(null)
   const [uploading, setUploading] = React.useState(false)
@@ -66,6 +68,29 @@ export default function UploadPhotoPanel({
     setTimeout(() => {
       fileInputRef.current?.click()
     }, 0)
+  }
+
+  const closePanel = () => {
+    if (previewUrl) {
+      try {
+        URL.revokeObjectURL(previewUrl)
+      } catch {}
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    setPreviewUrl(null)
+    setFile(null)
+    setPhotoCid(null)
+    setMetaCid(null)
+    setUserDecision(null)
+    setUserScore(null)
+    // ensure all derived state is reset so a future photo starts clean
+    setPhotoH3Index(null)
+    setPhotoCellCenter(null)
+    setPhotoLocationLabel(null)
+    setTakenAtIso(null)
+    setLabelLoading(false)
+    setExifDialogDismissed(false)
+    onCloseRequested?.()
   }
 
   // File input change handler (hoisted)
@@ -271,10 +296,23 @@ export default function UploadPhotoPanel({
                         <div className="mt-1 text-xs">Your score: {typeof userScore === "number" ? `${userScore}%` : "—"}</div>
                       </div>
                     )}
-                    <div className="pt-2 flex justify-center">
-                      <Button type="button" onClick={onUpload} disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}>
+                    <div className="pt-2 flex justify-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={onUpload}
+                        disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}
+                      >
                         {uploading ? "Submitting…" : "Submit"}
                       </Button>
+                      {!uploading && (
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          onClick={closePanel}
+                        >
+                          Cancel
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )
@@ -283,8 +321,9 @@ export default function UploadPhotoPanel({
           </figure>
           {error && <div className="text-xs">{error}</div>}
           {photoCid && (
-            <div className="mt-2">
-              <Button type="button" onClick={resetUpload}>Upload new photo</Button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button type="button" onClick={resetUpload}>Add another photo</Button>
+              <Button type="button" variant="neutral" onClick={closePanel}>Close</Button>
             </div>
           )}
         </div>
@@ -301,12 +340,27 @@ export default function UploadPhotoPanel({
       // 1) upload file
       const fd = new FormData()
       fd.append("file", file)
-      // build a descriptive name: sunsettings_<takenAt>_<h3index or noh3>
+      // build a descriptive name: sunsettings_photo_<takenAt>_<h3index or noh3>.<ext>
       const fallbackTaken = new Date(file.lastModified).toISOString()
       const taken = takenAtIso || fallbackTaken
       const safeTaken = taken.replace(/[:.]/g, "-")
-      const nameBase = `sunsettings_${safeTaken}_${photoH3Index || "noh3"}`
-      fd.append("name", nameBase)
+      // derive extension from MIME or original filename; default to .jpg
+      const mime = (file.type || "").toLowerCase()
+      const extFromMime =
+        mime === "image/jpeg" ? ".jpg" :
+        mime === "image/png" ? ".png" :
+        mime === "image/webp" ? ".webp" :
+        mime === "image/heic" ? ".heic" :
+        mime === "image/heif" ? ".heif" :
+        mime === "image/tiff" ? ".tiff" :
+        ""
+      const extFromName = (() => {
+        const m = /\.([a-z0-9]{2,5})$/i.exec(file.name || "")
+        return m ? `.${m[1].toLowerCase()}` : ""
+      })()
+      const photoExt = extFromMime || extFromName || ".jpg"
+      const photoName = `sunsettings_photo_${safeTaken}_${photoH3Index || "noh3"}${photoExt}`
+      fd.append("name", photoName)
       console.debug("[upload] sending file", { name: file.name, size: file.size, type: file.type })
       // pass score/location to server so it can be stored in Pinata metadata keyvalues
       if (typeof scorePercent === "number") fd.append("scorePercent", String(scorePercent))
@@ -331,49 +385,65 @@ export default function UploadPhotoPanel({
       setPhotoCid(upJson.cid)
       onUploaded?.(upJson.cid)
 
-      // 2) upload metadata JSON
-      const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
-      const hasExifNow = Boolean(photoH3Index)
-      const locationLabelForMeta = hasExifNow
-        ? (photoLocationLabel || null)
-        : (exifDialogDismissed ? "" : null)
-      const metadata = {
-        walletAddress: "", // TODO: fill when wallet integration is ready
-        photoCid: upJson.cid,
-        // flat fields requested
-        photoLocationLabel: locationLabelForMeta,
-        photoH3Index: photoH3Index || null,
-        photoCellCenterLat: photoCellCenter?.lat ?? null,
-        photoCellCenterLon: photoCellCenter?.lon ?? null,
-        sunsetScorePercent: typeof scorePercent === "number" ? scorePercent : null,
-        sunsetScoreLabel: scoreLabel || null,
-        userSunsetScorePercent: typeof userScore === "number" ? userScore : null,
-        photoCreatedAt,
-        // keep structured location too
-        location: null,
-        createdAt: new Date().toISOString(),
-      }
-      const meta = await fetch("/api/pinata/upload-json", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: metadata, name: `${nameBase}_meta_${upJson.cid}` }),
-      })
-      type UploadJsonResponse = { cid?: string; ok?: boolean; error?: string }
-      let metaJson: UploadJsonResponse | null = null
-      let metaText: string | null = null
+      let existingMetaCid: string | null = null
       try {
-        metaJson = await meta.json()
+        const lookupRes = await fetch(`/api/photos?photoCid=${encodeURIComponent(upJson.cid)}`, { cache: "no-store" })
+        if (lookupRes.ok) {
+          const lookupJson = await lookupRes.json().catch(() => null)
+          const existing = Array.isArray(lookupJson?.items) ? lookupJson.items[0] : null
+          if (existing && typeof existing.metadataCid === "string") {
+            existingMetaCid = existing.metadataCid
+          }
+        }
       } catch {
-        try { metaText = await meta.text() } catch { metaText = null }
+        existingMetaCid = null
       }
-      if (!meta.ok) {
-        console.error("[upload] metadata upload failed", { status: meta.status, json: metaJson, text: metaText?.slice(0, 500) })
-        const msg = metaJson?.error || metaText || `JSON upload failed: ${meta.status}`
-        throw new Error(typeof msg === "string" ? msg : `JSON upload failed: ${meta.status}`)
+
+      if (existingMetaCid) {
+        setMetaCid(existingMetaCid)
+        try { window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", { detail: { photoCid: upJson.cid, metadataCid: existingMetaCid } })) } catch {}
+      } else {
+        // upload metadata JSON exactly once when none exists yet
+        const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
+        const hasExifNow = Boolean(photoH3Index)
+        const locationLabelForMeta = hasExifNow
+          ? (photoLocationLabel || null)
+          : (exifDialogDismissed ? "" : null)
+        const metadata = {
+          walletAddress: "", // TODO: fill when wallet integration is ready
+          photoCid: upJson.cid,
+          photoLocationLabel: locationLabelForMeta,
+          photoH3Index: photoH3Index || null,
+          photoCellCenterLat: photoCellCenter?.lat ?? null,
+          photoCellCenterLon: photoCellCenter?.lon ?? null,
+          sunsetScorePercent: typeof scorePercent === "number" ? scorePercent : null,
+          sunsetScoreLabel: scoreLabel || null,
+          userSunsetScorePercent: typeof userScore === "number" ? userScore : null,
+          photoCreatedAt,
+        }
+        const metaName = `sunsettings_meta_${safeTaken}_${photoH3Index || "noh3"}_${upJson.cid}`
+        const meta = await fetch("/api/pinata/upload-json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: metadata, name: metaName }),
+        })
+        type UploadJsonResponse = { cid?: string; ok?: boolean; error?: string }
+        let metaJson: UploadJsonResponse | null = null
+        let metaText: string | null = null
+        try {
+          metaJson = await meta.json()
+        } catch {
+          try { metaText = await meta.text() } catch { metaText = null }
+        }
+        if (!meta.ok) {
+          console.error("[upload] metadata upload failed", { status: meta.status, json: metaJson, text: metaText?.slice(0, 500) })
+          const msg = metaJson?.error || metaText || `JSON upload failed: ${meta.status}`
+          throw new Error(typeof msg === "string" ? msg : `JSON upload failed: ${meta.status}`)
+        }
+        if (!metaJson?.cid) throw new Error("No CID from JSON upload")
+        setMetaCid(metaJson.cid)
+        try { window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", { detail: { photoCid: upJson.cid, metadataCid: metaJson.cid } })) } catch {}
       }
-      if (!metaJson?.cid) throw new Error("No CID from JSON upload")
-      setMetaCid(metaJson.cid)
-      // Clear local selection so we switch to the post-upload view
       if (previewUrl) {
         try { URL.revokeObjectURL(previewUrl) } catch {}
       }

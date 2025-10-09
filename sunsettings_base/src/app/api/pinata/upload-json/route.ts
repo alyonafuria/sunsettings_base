@@ -16,6 +16,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing JSON 'data'" }, { status: 400 })
     }
 
+    // Phase 1: write a minimal set of keyvalues for new metadata pins
+    // This does NOT alter the read path. Older pins remain unchanged.
+    const dataObj = (body.data && typeof body.data === "object") ? (body.data as Record<string, unknown>) : {}
+    const kv: Record<string, string> = {}
+    const asNum = (v: unknown) => (typeof v === "number" && Number.isFinite(v)) ? String(v) : undefined
+    const asStr = (v: unknown) => (typeof v === "string" && v.trim().length > 0) ? v.trim() : undefined
+    const latStr = asNum(dataObj.photoCellCenterLat ?? dataObj.lat)
+    const lonStr = asNum(dataObj.photoCellCenterLon ?? dataObj.lon)
+    const photoCidStr = asStr(dataObj.photoCid)
+    const labelStr = asStr(dataObj.photoLocationLabel)
+    const createdAtStr = asStr(dataObj.photoCreatedAt ?? dataObj.takenAt)
+    if (photoCidStr) kv.photoCid = photoCidStr
+    if (latStr) kv.photoCellCenterLat = latStr
+    if (lonStr) kv.photoCellCenterLon = lonStr
+    if (labelStr !== undefined) kv.photoLocationLabel = labelStr
+    if (createdAtStr) kv.photoCreatedAt = createdAtStr
+
     const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
       method: "POST",
       headers: {
@@ -24,7 +41,10 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         pinataContent: body.data,
-        pinataMetadata: body.name ? { name: body.name } : undefined,
+        pinataMetadata: {
+          ...(body.name ? { name: body.name } : {}),
+          ...(Object.keys(kv).length ? { keyvalues: kv } : {}),
+        },
       }),
     })
 
