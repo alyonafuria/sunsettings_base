@@ -48,7 +48,7 @@ export default function MapCanvas({
       if (cancelled) return
 
       const userStyle = getMapboxStyle()
-      const style = userStyle || "mapbox://styles/mapbox/streets-v12"
+      const style = userStyle || "mapbox://styles/mapbox/light-v11"
       const map = new mapboxgl.Map({
         container,
         style,
