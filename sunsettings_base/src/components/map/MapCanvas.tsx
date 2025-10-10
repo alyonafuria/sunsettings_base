@@ -35,6 +35,17 @@ function isPhotoPin(v: unknown): v is PhotoPin {
   )
 }
 
+// Ensure uniqueness across merges: prefer latest by metadataCid, then collapse duplicates by photoCid
+function dedupePins(pins: PhotoPin[]): PhotoPin[] {
+  // Latest by metadataCid wins
+  const byMeta = new Map<string, PhotoPin>()
+  for (const p of pins) byMeta.set(p.metadataCid, p)
+  // Collapse by photoCid (keep the most recent occurrence)
+  const byPhoto = new Map<string, PhotoPin>()
+  for (const p of byMeta.values()) byPhoto.set(p.photoCid, p)
+  return Array.from(byPhoto.values())
+}
+
 // Simple localStorage cache for pins
 const CACHE_KEY = "sunsettings:photos:v1"
 type CachePayload = { ts: number; items: unknown[] }
@@ -73,7 +84,6 @@ function hashToUnit(str: string): number {
 }
 
 function jitterLngLat(lat: number, lon: number, idSeed: string, maxMeters = 50): { lat: number; lon: number } {
-  const u1 = hashToUnit(idSeed)
   const u2 = hashToUnit(idSeed + "$")
   const meters = maxMeters
   const angle = u2 * Math.PI * 2
@@ -100,6 +110,8 @@ export default function MapCanvas({
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const mapRef = React.useRef<mapboxgl.Map | null>(null)
   const markersRef = React.useRef<mapboxgl.Marker[]>([])
+  // At most one ad-hoc preview marker at a time
+  const previewMarkerRef = React.useRef<mapboxgl.Marker | null>(null)
   const [/*errorMsg*/, setErrorMsg] = React.useState<string | null>(null)
   const [photoPins, setPhotoPins] = React.useState<PhotoPin[]>([])
   const [mapReady, setMapReady] = React.useState(false)
@@ -121,7 +133,7 @@ export default function MapCanvas({
       setPhotoPins((prev) => {
         const byId = new Map(prev.map((p) => [p.metadataCid, p]))
         for (const m of mapped) byId.set(m.metadataCid, m)
-        const next = Array.from(byId.values())
+        const next = dedupePins(Array.from(byId.values()))
         saveCachedPins(next)
         return next
       })
@@ -139,7 +151,7 @@ export default function MapCanvas({
         // Try cache-first for instant UI
         const cached = loadCachedPins()
         if (cached && !cancelled) {
-          setPhotoPins(cached)
+          setPhotoPins(dedupePins(cached))
         }
         const res = await fetch("/api/photos", { cache: "no-store", signal: controller.signal })
         if (!res.ok) throw new Error(`photos api ${res.status}`)
@@ -157,7 +169,7 @@ export default function MapCanvas({
           setPhotoPins((prev) => {
             const byId = new Map(prev.map((p) => [p.metadataCid, p]))
             for (const m of mapped) byId.set(m.metadataCid, m)
-            const next = Array.from(byId.values())
+            const next = dedupePins(Array.from(byId.values()))
             saveCachedPins(next)
             return next
           })
@@ -197,7 +209,7 @@ export default function MapCanvas({
           setPhotoPins((prev) => {
             const byId = new Map(prev.map((p) => [p.metadataCid, p]))
             byId.set(optimistic.metadataCid, optimistic)
-            const next = Array.from(byId.values())
+            const next = dedupePins(Array.from(byId.values()))
             saveCachedPins(next)
             return next
           })
@@ -210,6 +222,8 @@ export default function MapCanvas({
               map.easeTo({ center: [j.lon, j.lat], zoom: targetZoom, duration: 700 })
             }
           } catch {}
+          // Remove any existing preview marker right away to avoid duplicate markers during optimistic window
+          try { previewMarkerRef.current?.remove(); previewMarkerRef.current = null } catch {}
         }
         const url = metadataCid
           ? `/api/photos?metadataCid=${encodeURIComponent(metadataCid)}`
@@ -234,13 +248,14 @@ export default function MapCanvas({
                 for (const m of mapped) byId.set(m.metadataCid, m)
                 // Remove nearby temp preview pins (within ~30m) to avoid duplicates
                 const real = mapped[0]
-                const next = Array.from(byId.values()).filter((p) => {
+                const filtered = Array.from(byId.values()).filter((p) => {
                   if (!p.previewUrl) return true
                   const dLat = p.lat - real.lat
                   const dLon = p.lon - real.lon
                   const approxMeters = Math.sqrt(dLat * dLat + dLon * dLon) * 111_000
                   return approxMeters > 30
                 })
+                const next = dedupePins(filtered)
                 saveCachedPins(next)
                 return next
               })
@@ -252,6 +267,25 @@ export default function MapCanvas({
                   const j = jitterLngLat(pin.lat, pin.lon, pin.metadataCid, jitterRadiusForZoom(map.getZoom()))
                   const targetZoom = Math.max(map.getZoom() || 0, 12)
                   map.easeTo({ center: [j.lon, j.lat], zoom: targetZoom, duration: 700 })
+                  // Clean up any preview markers near this location
+                  try {
+                    const toRemove: mapboxgl.Marker[] = []
+                    for (const m of markersRef.current) {
+                      const el = m.getElement() as HTMLElement
+                      const isPreview = el.dataset?.previewMarker === "1"
+                      if (!isPreview) continue
+                      const ll = m.getLngLat()
+                      const dLat = pin.lat - ll.lat
+                      const dLon = pin.lon - ll.lng
+                      const meters = Math.sqrt(dLat * dLat + dLon * dLon) * 111_000
+                      if (meters < 60) toRemove.push(m)
+                    }
+                    toRemove.forEach((m) => { try { m.remove() } catch {} })
+                    // remove from ref list
+                    if (toRemove.length) {
+                      markersRef.current = markersRef.current.filter((m) => !toRemove.includes(m))
+                    }
+                  } catch {}
                 }
               } catch {}
             }
@@ -280,6 +314,8 @@ export default function MapCanvas({
           el.style.flexDirection = "column"
           el.style.alignItems = "center"
           el.style.pointerEvents = "auto"
+          // mark as preview to allow later cleanup
+          try { el.dataset.previewMarker = "1" } catch {}
 
           const frame = document.createElement("div")
           frame.style.width = "48px"
@@ -296,6 +332,18 @@ export default function MapCanvas({
           img.style.width = "100%"
           img.style.height = "100%"
           img.style.objectFit = "cover"
+          img.onerror = () => {
+            // For pure preview markers we don't have IPFS yet; show a neutral background
+            try {
+              img.onerror = null
+              img.removeAttribute("src")
+              img.style.display = "none"
+              frame.style.background = "#333"
+              frame.style.backgroundImage = "linear-gradient(135deg, #444 25%, transparent 25%), linear-gradient(225deg, #444 25%, transparent 25%), linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(315deg, #444 25%, #333 25%)"
+              frame.style.backgroundPosition = "10px 0, 10px 10px, 0 0, 0 10px"
+              frame.style.backgroundSize = "10px 10px"
+            } catch {}
+          }
           frame.appendChild(img)
 
           const stem = document.createElement("div")
@@ -308,10 +356,12 @@ export default function MapCanvas({
           el.appendChild(stem)
 
           const j = jitterLngLat(lat, lon, `${lat.toFixed(5)},${lon.toFixed(5)}`, jitterRadiusForZoom(map.getZoom()))
+          // Replace any existing preview marker to avoid duplicates
+          try { previewMarkerRef.current?.remove() } catch {}
           const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
             .setLngLat([j.lon, j.lat])
             .addTo(map)
-          markersRef.current.push(marker)
+          previewMarkerRef.current = marker
 
           // center softly to help user see it
           try {
@@ -319,18 +369,6 @@ export default function MapCanvas({
             map.easeTo({ center: [j.lon, j.lat], zoom: targetZoom, duration: 400 })
           } catch {}
         }
-        // Also add a temp pin to state so it persists after re-render
-        const tempId = `temp-${Math.random().toString(36).slice(2)}`
-        const tempPin: PhotoPin = {
-          metadataCid: tempId,
-          photoCid: tempId,
-          lat,
-          lon,
-          locationLabel: typeof d.locationLabel === "string" ? d.locationLabel : null,
-          takenAtIso: typeof d.takenAtIso === "string" ? d.takenAtIso : null,
-          previewUrl,
-        }
-        setPhotoPins((prev) => [...prev, tempPin])
       } catch {}
     }
     window.addEventListener("sunsettings:photoPreview", onPreview as EventListener)
@@ -461,10 +499,10 @@ export default function MapCanvas({
     }
   }, [])
 
-  // Recenter if center prop changes later
+  // Recenter if center/zoom props change later
   React.useEffect(() => {
     if (mapRef.current && center) {
-      mapRef.current.easeTo({ center: [center.lon, center.lat], duration: 600 })
+      mapRef.current.easeTo({ center: [center.lon, center.lat], zoom, duration: 600 })
     }
   }, [center, zoom])
 
@@ -480,11 +518,21 @@ export default function MapCanvas({
       }
     })
     markersRef.current = []
+    // Remove any stray preview marker on full re-render of markers
+    if (previewMarkerRef.current) {
+      try { previewMarkerRef.current.remove() } catch {}
+      previewMarkerRef.current = null
+    }
 
     const z = map.getZoom()
     const jitterMeters = jitterRadiusForZoom(z)
     photoPins.forEach((pin) => {
       try {
+        // Only render pins that have a valid IPFS CID; skip placeholders with no image yet
+        const hasValidCid = typeof pin.photoCid === 'string' && /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[1-9A-HJ-NP-Za-km-z]{20,})$/.test(pin.photoCid)
+        if (!hasValidCid) {
+          return
+        }
         const el = document.createElement("div")
         el.style.width = "52px"
         el.style.display = "flex"
@@ -502,11 +550,24 @@ export default function MapCanvas({
         frame.style.backgroundColor = "#111"
 
         const img = document.createElement("img")
-        img.src = pin.previewUrl || `${PINATA_GATEWAY}/ipfs/${pin.photoCid}`
+        const ipfsUrl = `${PINATA_GATEWAY}/ipfs/${pin.photoCid}`
+        img.src = ipfsUrl
         img.alt = pin.locationLabel || "Uploaded photo"
         img.style.width = "100%"
         img.style.height = "100%"
         img.style.objectFit = "cover"
+        // Keep a simple onerror to show placeholder if gateway fails
+        img.onerror = () => {
+          try {
+            img.onerror = null
+            img.removeAttribute("src")
+            img.style.display = "none"
+            frame.style.background = "#333"
+            frame.style.backgroundImage = "linear-gradient(135deg, #444 25%, transparent 25%), linear-gradient(225deg, #444 25%, transparent 25%), linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(315deg, #444 25%, #333 25%)"
+            frame.style.backgroundPosition = "10px 0, 10px 10px, 0 0, 0 10px"
+            frame.style.backgroundSize = "10px 10px"
+          } catch {}
+        }
         frame.appendChild(img)
 
         const stem = document.createElement("div")
@@ -539,6 +600,10 @@ export default function MapCanvas({
         }
       })
       markersRef.current = []
+      if (previewMarkerRef.current) {
+        try { previewMarkerRef.current.remove() } catch {}
+        previewMarkerRef.current = null
+      }
     }
   }, [photoPins, mapReady])
 
