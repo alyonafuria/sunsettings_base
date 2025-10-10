@@ -142,6 +142,9 @@ export default function MapCanvas({
     }
   }, [])
 
+  // Map initialization runs once on mount. We intentionally do not include `center`/`zoom` here
+  // to avoid re-creating the map; subsequent prop changes are handled in the separate effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     let cancelled = false
 

@@ -59,6 +59,13 @@ export default function UploadPhotoPanel({
   const [geoLoading, setGeoLoading] = React.useState(false)
   const [geoError, setGeoError] = React.useState<string | null>(null)
 
+  // Basic client-side detection to tailor primary action
+  const isMobile = React.useMemo(() => {
+    if (typeof navigator === "undefined") return false
+    const ua = (navigator.userAgent || (navigator as Navigator & { vendor?: string }).vendor || "").toLowerCase()
+    return /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(ua)
+  }, [])
+
   const resetUpload = () => {
     setFile(null)
     setPhotoCid(null)
@@ -202,29 +209,32 @@ export default function UploadPhotoPanel({
           className="hidden"
           onChange={onFileChange}
         />
-        <div className="w-full flex justify-center gap-2 mx-auto">
-          <Button
-            type="button"
-            variant="neutral"
-            onClick={() => {
-              onOpenPicker?.()
-              fileInputCameraRef.current?.click()
-            }}
-            disabled={uploading}
-          >
-            <span>Take photo</span>
-          </Button>
-          <Button
-            type="button"
-            variant="neutral"
-            onClick={() => {
-              onOpenPicker?.()
-              fileInputLibraryRef.current?.click()
-            }}
-            disabled={uploading}
-          >
-            <span>Choose photo</span>
-          </Button>
+        <div className="w-full flex justify-center mx-auto">
+          {isMobile ? (
+            <Button
+              type="button"
+              variant="neutral"
+              onClick={() => {
+                onOpenPicker?.()
+                fileInputCameraRef.current?.click()
+              }}
+              disabled={uploading}
+            >
+              <span>Take photo</span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="neutral"
+              onClick={() => {
+                onOpenPicker?.()
+                fileInputLibraryRef.current?.click()
+              }}
+              disabled={uploading}
+            >
+              <span>Upload photo</span>
+            </Button>
+          )}
         </div>
         {error && <div className="text-xs text-center">{error}</div>}
       </>
