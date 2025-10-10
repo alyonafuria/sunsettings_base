@@ -4,6 +4,7 @@ import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import FlipCard from "@/components/ai/FlipCard"
 import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
+import { getWeatherSummary } from "@/lib/weather/getWeatherSummary"
 
 function buildLocationLabelFromCache(): string | null {
   if (typeof window === "undefined") return null
@@ -42,53 +43,10 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     else setLocationLabel("")
   }, [latStr, lonStr])
 
-  // Helper: fetch BrightSky and build WeatherFeatures with prompt's expected keys
+  // Shared weather summary builder (BrightSky -> OpenMeteo fallback)
   const buildWeatherFeatures = React.useCallback(async (lat: number, lon: number): Promise<string> => {
     try {
-      const today = new Date()
-      const dateParam = today.toISOString().slice(0, 10)
-      const url = `https://api.brightsky.dev/weather?date=${dateParam}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`Weather HTTP ${res.status}`)
-      const json = await res.json()
-      type Rec = { timestamp?: string; cloud_cover?: number; relative_humidity?: number; temperature?: number; precipitation_probability?: number; precipitation?: number }
-      const records: Rec[] = (json.weather as Rec[]) || []
-      if (!records.length) return ""
-
-      const sameDay = records.filter((r) => r.timestamp?.startsWith(dateParam))
-      const sample = sameDay.length ? sameDay : records
-      const sunsetWindow = sample.filter((r) => {
-        const hour = parseInt(r.timestamp?.substring(11, 13) || "0", 10)
-        return hour >= 15 && hour <= 22
-      })
-      const target = sunsetWindow.length ? sunsetWindow : sample.slice(-6)
-
-      const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
-      const cloudArr = target.map((r) => (typeof r.cloud_cover === "number" ? r.cloud_cover : null)).filter((n): n is number => n !== null)
-      const humidArr = target.map((r) => (typeof r.relative_humidity === "number" ? r.relative_humidity : null)).filter((n): n is number => n !== null)
-      const precipProbArr = target.map((r) => (typeof r.precipitation_probability === "number" ? r.precipitation_probability : null)).filter((n): n is number => n !== null)
-      const precipArr = target.map((r) => (typeof r.precipitation === "number" ? r.precipitation : 0))
-
-      const cloud_total_pct = avg(cloudArr)
-      const humidity_pct = avg(humidArr)
-      const avg_temp = avg(target.map((r) => (typeof r.temperature === "number" ? r.temperature : null)).filter((n): n is number => n !== null))
-      const precip_prob_max_pct = precipProbArr.length ? Math.max(...precipProbArr) : null
-      const precip_total_mm = precipArr.reduce((a, b) => a + (b || 0), 0)
-
-      const parts: string[] = []
-      // Prompt-expected keys
-      if (cloud_total_pct !== null) parts.push(`cloud_total_pct=${Math.round(cloud_total_pct)}`)
-      if (humidity_pct !== null) parts.push(`humidity_pct=${Math.round(humidity_pct)}`)
-      if (typeof precip_prob_max_pct === "number") parts.push(`precip_prob_max_pct=${Math.round(precip_prob_max_pct)}`)
-      parts.push(`precip_total_mm=${precip_total_mm.toFixed(1)}`)
-      // Legacy/aux keys (prompt will ignore unknowns, but this helps with compatibility)
-      if (cloud_total_pct !== null) parts.push(`avg_cloud=${Math.round(cloud_total_pct)}`)
-      if (humidity_pct !== null) parts.push(`avg_humidity=${Math.round(humidity_pct)}`)
-      if (typeof avg_temp === "number") parts.push(`avg_temp=${avg_temp.toFixed(1)}`)
-      if (typeof precip_prob_max_pct === "number") parts.push(`precip_prob_max=${Math.round(precip_prob_max_pct)}`)
-      parts.push(`precip_total=${precip_total_mm.toFixed(1)}`)
-      parts.push(`hours_analyzed=${target.length}`)
-      return parts.join("; ")
+      return await getWeatherSummary(lat, lon)
     } catch {
       return ""
     }
