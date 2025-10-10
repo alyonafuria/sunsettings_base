@@ -45,6 +45,8 @@ export default function UploadPhotoPanel({
   const [photoCid, setPhotoCid] = React.useState<string | null>(null)
   const [metaCid, setMetaCid] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const fileInputCameraRef = React.useRef<HTMLInputElement | null>(null)
+  const fileInputLibraryRef = React.useRef<HTMLInputElement | null>(null)
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
   const [userDecision, setUserDecision] = React.useState<"yes" | "no" | null>(null)
   const [userScore, setUserScore] = React.useState<number | null>(null)
@@ -63,6 +65,8 @@ export default function UploadPhotoPanel({
     setMetaCid(null)
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
+    if (fileInputCameraRef.current) fileInputCameraRef.current.value = ""
+    if (fileInputLibraryRef.current) fileInputLibraryRef.current.value = ""
     onReset?.()
     // Immediately open the picker again
     onOpenPicker?.()
@@ -182,24 +186,44 @@ export default function UploadPhotoPanel({
   if (!file && !photoCid) {
     return (
       <>
+        {/* Hidden inputs: one for camera, one for gallery/files */}
         <input
-          ref={fileInputRef}
+          ref={fileInputCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={onFileChange}
+        />
+        <input
+          ref={fileInputLibraryRef}
           type="file"
           accept="image/*"
           className="hidden"
           onChange={onFileChange}
         />
-        <div className="w-full flex justify-center mx-auto">
+        <div className="w-full flex justify-center gap-2 mx-auto">
           <Button
             type="button"
             variant="neutral"
             onClick={() => {
               onOpenPicker?.()
-              fileInputRef.current?.click()
+              fileInputCameraRef.current?.click()
             }}
             disabled={uploading}
           >
-            <span>Add photo</span>
+            <span>Take photo</span>
+          </Button>
+          <Button
+            type="button"
+            variant="neutral"
+            onClick={() => {
+              onOpenPicker?.()
+              fileInputLibraryRef.current?.click()
+            }}
+            disabled={uploading}
+          >
+            <span>Choose photo</span>
           </Button>
         </div>
         {error && <div className="text-xs text-center">{error}</div>}
