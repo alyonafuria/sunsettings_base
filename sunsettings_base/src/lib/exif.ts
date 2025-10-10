@@ -5,12 +5,19 @@
 // Returns null if EXIF or GPS are not present or parsing fails.
 export async function parseGpsFromFile(file: File): Promise<{ lat: number; lon: number } | null> {
   try {
-    // Dynamic import to avoid SSR issues
-    const exifr = await import('exifr')
-    // exifr.parse returns a large object; we request gps
-    const data = (await (exifr as any).parse(file, { gps: true })) as any
-    const latitude = (data as any)?.latitude ?? (data as any)?.gps?.latitude
-    const longitude = (data as any)?.longitude ?? (data as any)?.gps?.longitude
+    const mod = await import('exifr')
+    const parse: ((blob: Blob, options?: unknown) => Promise<unknown>) | undefined =
+      typeof (mod as any)?.parse === 'function'
+        ? (mod as any).parse
+        : typeof (mod as any)?.default === 'function'
+          ? (mod as any).default
+          : undefined
+
+    if (!parse) return null
+
+    const data = await parse(file, { gps: true }) as any
+    const latitude = data?.latitude ?? data?.gps?.latitude
+    const longitude = data?.longitude ?? data?.gps?.longitude
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       return { lat: latitude, lon: longitude }
     }
@@ -24,8 +31,17 @@ export async function parseGpsFromFile(file: File): Promise<{ lat: number; lon: 
 // Falls back to null if not present or parsing fails.
 export async function parseTakenAtFromFile(file: File): Promise<string | null> {
   try {
-    const exifr = await import('exifr')
-    const data = (await (exifr as any).parse(file, { exif: true })) as any
+    const mod = await import('exifr')
+    const parse: ((blob: Blob, options?: unknown) => Promise<unknown>) | undefined =
+      typeof (mod as any)?.parse === 'function'
+        ? (mod as any).parse
+        : typeof (mod as any)?.default === 'function'
+          ? (mod as any).default
+          : undefined
+
+    if (!parse) return null
+
+    const data = await parse(file, { exif: true }) as any
     const dt: Date | undefined = data?.DateTimeOriginal || data?.CreateDate || data?.ModifyDate
     if (dt instanceof Date && !isNaN(dt.getTime())) return dt.toISOString()
     return null
