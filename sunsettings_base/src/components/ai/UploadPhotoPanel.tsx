@@ -54,6 +54,8 @@ export default function UploadPhotoPanel({
   const [labelLoading, setLabelLoading] = React.useState(false)
   const [takenAtIso, setTakenAtIso] = React.useState<string | null>(null)
   const [exifDialogDismissed, setExifDialogDismissed] = React.useState(false)
+  const [geoLoading, setGeoLoading] = React.useState(false)
+  const [geoError, setGeoError] = React.useState<string | null>(null)
 
   const resetUpload = () => {
     setFile(null)
@@ -71,11 +73,6 @@ export default function UploadPhotoPanel({
   }
 
   const closePanel = () => {
-    if (previewUrl) {
-      try {
-        URL.revokeObjectURL(previewUrl)
-      } catch {}
-    }
     if (fileInputRef.current) fileInputRef.current.value = ""
     setPreviewUrl(null)
     setFile(null)
@@ -261,6 +258,80 @@ export default function UploadPhotoPanel({
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        setGeoError(null)
+                        if (!navigator.geolocation) {
+                          setGeoError("Geolocation not available")
+                          return
+                        }
+                        setGeoLoading(true)
+                        try {
+                          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
+                          })
+                          const lat = pos.coords.latitude
+                          const lon = pos.coords.longitude
+                          const h3 = toH3(lat, lon, DEFAULT_H3_RES)
+                          const center = centerOf(h3)
+                          setPhotoH3Index(h3)
+                          setPhotoCellCenter(center)
+                          // Dispatch immediate preview at device location
+                          try {
+                            window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
+                              detail: {
+                                lat: center.lat,
+                                lon: center.lon,
+                                locationLabel: null,
+                                takenAtIso: takenAtIso ?? null,
+                                previewUrl: previewUrl || null,
+                              }
+                            }))
+                          } catch {}
+                          // Reverse geocode and update label
+                          setLabelLoading(true)
+                          try {
+                            const res = await fetch("/api/geocode/reverse", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ lat: center.lat, lon: center.lon }),
+                            })
+                            if (res.ok) {
+                              const data = await res.json()
+                              setPhotoLocationLabel(data?.label || null)
+                              // Optional update event with label
+                              try {
+                                window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
+                                  detail: {
+                                    lat: center.lat,
+                                    lon: center.lon,
+                                    locationLabel: data?.label || null,
+                                    takenAtIso: takenAtIso ?? null,
+                                    previewUrl: previewUrl || null,
+                                  }
+                                }))
+                              } catch {}
+                            } else {
+                              setPhotoLocationLabel(null)
+                            }
+                          } finally {
+                            setLabelLoading(false)
+                          }
+                        } catch (e) {
+                          setGeoError((e as GeolocationPositionError)?.message || "Failed to get location")
+                        } finally {
+                          setGeoLoading(false)
+                        }
+                      }}
+                      disabled={geoLoading}
+                    >
+                      {geoLoading ? "Locating…" : "Use my location"}
+                    </Button>
+                  </div>
+                  {geoError && (<div className="mt-1 text-[11px] text-red-600">{geoError}</div>)}
                 </div>
               )
             )}
@@ -492,11 +563,7 @@ export default function UploadPhotoPanel({
           }))
         } catch {}
       }
-      // Delay revoking previewUrl so map can use it briefly for the optimistic marker
-      if (previewUrl) {
-        const urlToRevoke = previewUrl
-        setTimeout(() => { try { URL.revokeObjectURL(urlToRevoke) } catch {} }, 20000)
-      }
+      // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
       setPreviewUrl(null)
       setFile(null)
       setUserDecision(null)
