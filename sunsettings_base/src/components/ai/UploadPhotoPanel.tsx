@@ -121,6 +121,18 @@ export default function UploadPhotoPanel({
             const center = centerOf(h3)
             setPhotoH3Index(h3)
             setPhotoCellCenter(center)
+            // Notify map to show a temporary preview pin immediately (before reverse geocode)
+            try {
+              window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
+                detail: {
+                  lat: center.lat,
+                  lon: center.lon,
+                  locationLabel: null,
+                  takenAtIso: takenAtIso ?? null,
+                  previewUrl: url,
+                }
+              }))
+            } catch {}
             // reverse geocode center via our API
             setLabelLoading(true)
             try {
@@ -139,6 +151,18 @@ export default function UploadPhotoPanel({
             } finally {
               setLabelLoading(false)
             }
+            // Optionally send an update with resolved label (non-critical)
+            try {
+              window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
+                detail: {
+                  lat: center.lat,
+                  lon: center.lon,
+                  locationLabel: photoLocationLabel ?? null,
+                  takenAtIso: takenAtIso ?? null,
+                  previewUrl: url,
+                }
+              }))
+            } catch {}
           } else {
             setPhotoLocationLabel(null)
           }
@@ -401,7 +425,19 @@ export default function UploadPhotoPanel({
 
       if (existingMetaCid) {
         setMetaCid(existingMetaCid)
-        try { window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", { detail: { photoCid: upJson.cid, metadataCid: existingMetaCid } })) } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", {
+            detail: {
+              photoCid: upJson.cid,
+              metadataCid: existingMetaCid,
+              lat: photoCellCenter?.lat ?? null,
+              lon: photoCellCenter?.lon ?? null,
+              locationLabel: photoLocationLabel ?? null,
+              takenAtIso: takenAtIso ?? null,
+              previewUrl: previewUrl || null,
+            }
+          }))
+        } catch {}
       } else {
         // upload metadata JSON exactly once when none exists yet
         const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
@@ -442,10 +478,24 @@ export default function UploadPhotoPanel({
         }
         if (!metaJson?.cid) throw new Error("No CID from JSON upload")
         setMetaCid(metaJson.cid)
-        try { window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", { detail: { photoCid: upJson.cid, metadataCid: metaJson.cid } })) } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", {
+            detail: {
+              photoCid: upJson.cid,
+              metadataCid: metaJson.cid,
+              lat: photoCellCenter?.lat ?? null,
+              lon: photoCellCenter?.lon ?? null,
+              locationLabel: photoLocationLabel ?? null,
+              takenAtIso: takenAtIso ?? null,
+              previewUrl: previewUrl || null,
+            }
+          }))
+        } catch {}
       }
+      // Delay revoking previewUrl so map can use it briefly for the optimistic marker
       if (previewUrl) {
-        try { URL.revokeObjectURL(previewUrl) } catch {}
+        const urlToRevoke = previewUrl
+        setTimeout(() => { try { URL.revokeObjectURL(urlToRevoke) } catch {} }, 20000)
       }
       setPreviewUrl(null)
       setFile(null)
