@@ -4,7 +4,7 @@ import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import FlipCard from "@/components/ai/FlipCard"
 import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
-import { getWeatherSummary } from "@/lib/weather/getWeatherSummary"
+ 
 
 function buildLocationLabelFromCache(): string | null {
   if (typeof window === "undefined") return null
@@ -26,6 +26,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const [probability, setProbability] = React.useState<number | null>(null)
   const [description, setDescription] = React.useState<string>("")
   const [locationLabel, setLocationLabel] = React.useState<string>("")
+  const locationLabelRef = React.useRef<string>("")
   const [cardForceClosed, setCardForceClosed] = React.useState(false)
   const [cardCloseSignal, setCardCloseSignal] = React.useState(0)
 
@@ -43,56 +44,90 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     else setLocationLabel("")
   }, [latStr, lonStr])
 
-  // Shared weather summary builder (BrightSky -> OpenMeteo fallback)
+  React.useEffect(() => {
+    locationLabelRef.current = locationLabel
+  }, [locationLabel])
+
+  // Shared weather summary builder via server-cached API
   const buildWeatherFeatures = React.useCallback(async (lat: number, lon: number): Promise<string> => {
     try {
-      return await getWeatherSummary(lat, lon)
+      const res = await fetch(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { cache: "no-store" })
+      if (!res.ok) return ""
+      const data = await res.json().catch(() => null)
+      const ws = typeof data?.weatherSummary === "string" ? data.weatherSummary : ""
+      return ws
     } catch {
       return ""
     }
   }, [])
 
-  // Trigger analysis when arriving or when coords change
+  // Dedupe/debounce analysis on coordinate changes
+  const inFlightRef = React.useRef<Promise<void> | null>(null)
+  const lastKeyRef = React.useRef<string | null>(null)
+  const lastAtRef = React.useRef<number>(0)
+  const debounceRef = React.useRef<number | null>(null)
+
   React.useEffect(() => {
     let cancelled = false
-    const doAnalyze = async () => {
+    const hasCoords = typeof latNum === "number" && typeof lonNum === "number"
+    if (!hasCoords) return () => { cancelled = true }
+
+    const round = (x: number, step = 0.05) => Math.round(x / step) * step
+    const ymd = new Date().toISOString().slice(0, 10)
+    const key = `${round(latNum as number)},${round(lonNum as number)}:${ymd}`
+
+    // Skip if just ran with same key very recently (2s)
+    if (lastKeyRef.current === key && Date.now() - lastAtRef.current < 2000) {
+      return () => { cancelled = true }
+    }
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+
+    debounceRef.current = window.setTimeout(async () => {
+      if (cancelled) return
+      if (inFlightRef.current) return
+      lastKeyRef.current = key
+      lastAtRef.current = Date.now()
       setLoading(true)
       setError(null)
-      try {
-        // Build weather summary if coords available; else let API use fallback
-        const weatherSummary =
-          typeof latNum === "number" && typeof lonNum === "number"
-            ? await buildWeatherFeatures(latNum, lonNum)
-            : ""
-
-        const res = await fetch("/api/sunset-analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: locationLabel || "Unknown",
-            weatherSummary,
-            seed: Math.floor(Math.random() * 1_000_000),
-          }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as { ok?: boolean; result?: { probability: number | null; description: string } }
-        if (!cancelled && data?.result) {
-          setProbability(data.result.probability ?? null)
-          setDescription(data.result.description ?? "")
+      inFlightRef.current = (async () => {
+        try {
+          const weatherSummary = await buildWeatherFeatures(latNum as number, lonNum as number)
+          const res = await fetch("/api/sunset-analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: locationLabelRef.current || "Unknown",
+              weatherSummary,
+              seed: Math.floor(Math.random() * 1_000_000),
+            }),
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = (await res.json()) as { ok?: boolean; result?: { probability: number | null; description: string } }
+          if (!cancelled && data?.result) {
+            setProbability(data.result.probability ?? null)
+            setDescription(data.result.description ?? "")
+          }
+        } catch (e) {
+          if (!cancelled) setError((e as Error)?.message || "Failed to analyze")
+        } finally {
+          if (!cancelled) setLoading(false)
+          inFlightRef.current = null
         }
-      } catch (e) {
-        if (!cancelled) setError((e as Error)?.message || "Failed to analyze")
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
+      })()
+    }, 200)
 
-    // Run if we have either a label or valid coordinates
-    if (locationLabel || (typeof latNum === "number" && typeof lonNum === "number")) doAnalyze()
     return () => {
       cancelled = true
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
     }
-  }, [locationLabel, latNum, lonNum, buildWeatherFeatures])
+  }, [latNum, lonNum, buildWeatherFeatures])
 
   // Hide on ESC
   React.useEffect(() => {
