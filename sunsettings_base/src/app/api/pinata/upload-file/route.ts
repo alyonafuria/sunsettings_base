@@ -36,17 +36,29 @@ export async function POST(req: Request) {
       const keyvalues: Record<string, string> = {}
       if (scorePercentStr) keyvalues.sunsetScorePercent = scorePercentStr
       if (scoreLabel) keyvalues.sunsetScoreLabel = scoreLabel
-      if (locationLabel) keyvalues.locationLabel = locationLabel
+      // Standardized keys consumed by read path
+      if (locationLabel) {
+        keyvalues.photoLocationLabel = locationLabel
+      }
       if (userScorePercentStr) keyvalues.userSunsetScorePercent = userScorePercentStr
       if (deviceId) keyvalues.deviceId = deviceId
-      if (gpsLat) keyvalues.gpsLat = gpsLat
-      if (gpsLon) keyvalues.gpsLon = gpsLon
+      if (gpsLat) {
+        keyvalues.photoCellCenterLat = gpsLat
+      }
+      if (gpsLon) {
+        keyvalues.photoCellCenterLon = gpsLon
+      }
       if (gpsAccuracy) keyvalues.gpsAccuracy = gpsAccuracy
       if (gpsFixAtIso) keyvalues.gpsFixAtIso = gpsFixAtIso
-      if (captureTimestamp) keyvalues.captureTimestamp = captureTimestamp
+      if (captureTimestamp) {
+        keyvalues.photoCreatedAt = captureTimestamp
+      }
       if (prehashSha256) keyvalues.prehashSha256 = prehashSha256
       type PinataMetadata = { name?: string; keyvalues?: Record<string, string> }
-      const meta: PinataMetadata = { name }
+      // Ensure the name is discoverable by listing filter
+      const ts = new Date().toISOString().replace(/[:.]/g, "-")
+      const finalName = name && name.includes("sunsettings_meta") ? name : `sunsettings_meta_${ts}.jpg`
+      const meta: PinataMetadata = { name: finalName }
       if (Object.keys(keyvalues).length) meta.keyvalues = keyvalues
       upstream.append("pinataMetadata", JSON.stringify(meta))
     }
