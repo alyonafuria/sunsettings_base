@@ -15,33 +15,6 @@ interface PinListRow {
   }
 }
 
-// Direct search utility: find metadata pins by a specific photoCid stored in keyvalues
-async function fetchPinListByPhotoCid(photoCid: string, pageOffset: number, limit: number): Promise<PinListRow[]> {
-  const url = new URL("https://api.pinata.cloud/data/pinList")
-  url.searchParams.set("status", "pinned")
-  url.searchParams.set("pageLimit", limit.toString())
-  url.searchParams.set("pageOffset", pageOffset.toString())
-  url.searchParams.set("includeCount", "false")
-  url.searchParams.set("includeMetadata", "true")
-  // Filter by keyvalue photoCid to locate the metadata JSON for that photo
-  url.searchParams.set("metadata[keyvalues][photoCid]", photoCid)
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${PINATA_JWT}`,
-    },
-  })
-
-  if (!res.ok) {
-    throw new Error(`Pinata pinList by photoCid failed with status ${res.status}`)
-  }
-
-  const payload = await res.json().catch(() => null)
-  const rows = Array.isArray(payload?.rows) ? payload.rows : []
-  return rows
-}
-
 interface PhotoMetadata {
   metadataCid: string
   photoCid: string

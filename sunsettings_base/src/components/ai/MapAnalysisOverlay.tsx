@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import FlipCard from "@/components/ai/FlipCard"
 import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
  
 
 function buildLocationLabelFromCache(): string | null {
@@ -34,6 +35,14 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const [isPastSunset, setIsPastSunset] = React.useState(false)
   const [dayBump, setDayBump] = React.useState(0)
   const [locationMismatch, setLocationMismatch] = React.useState(false)
+  const [selectedPin, setSelectedPin] = React.useState<null | {
+    metadataCid: string
+    photoCid: string
+    lat: number
+    lon: number
+    locationLabel: string | null
+    takenAtIso: string | null
+  }>(null)
 
   // Derive lat/lon from URL for display fallback
   const latStr = sp.get("lat")
@@ -42,11 +51,160 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const lonNum = lonStr ? Number(lonStr) : undefined
 
   React.useEffect(() => {
-    const cached = buildLocationLabelFromCache()
-    if (cached) setLocationLabel(cached)
-    else if (latStr && lonStr) setLocationLabel(`${latStr}, ${lonStr}`)
-    else setLocationLabel("")
+    // Prefer explicit URL coordinates if provided, fallback to cached label
+    if (latStr && lonStr) {
+      setLocationLabel(`${latStr}, ${lonStr}`)
+    } else {
+      const cached = buildLocationLabelFromCache()
+      setLocationLabel(cached || "")
+    }
   }, [latStr, lonStr, dayBump])
+
+  // When coords are present, resolve a human-readable label and cache it
+  React.useEffect(() => {
+    const hasCoords = typeof latNum === 'number' && typeof lonNum === 'number'
+    if (!hasCoords) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/geocode/reverse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: latNum, lon: lonNum }),
+        })
+        if (!res.ok) return
+        const data = await res.json().catch(() => null)
+        if (cancelled) return
+        const label = (data && typeof data.label === 'string' && data.label.trim().length)
+          ? data.label
+          : `${latNum}, ${lonNum}`
+        setLocationLabel(label)
+        try { localStorage.setItem('locationCache', JSON.stringify({ label })) } catch {}
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [latNum, lonNum])
+
+  // Open photo panel on marker click
+  React.useEffect(() => {
+    const onPin = (e: Event) => {
+      try {
+        const ce = e as CustomEvent
+        type PinDetail = {
+          metadataCid?: unknown
+          photoCid?: unknown
+          lat?: unknown
+          lon?: unknown
+          locationLabel?: unknown
+          takenAtIso?: unknown
+        }
+        const d = (ce?.detail ?? {}) as PinDetail
+        const metadataCid = typeof d.metadataCid === 'string' ? d.metadataCid : null
+        const photoCid = typeof d.photoCid === 'string' ? d.photoCid : null
+        const lat = typeof d.lat === 'number' ? d.lat : (typeof d.lat === 'string' ? Number(d.lat) : null)
+        const lon = typeof d.lon === 'number' ? d.lon : (typeof d.lon === 'string' ? Number(d.lon) : null)
+        const locationLabel = typeof d.locationLabel === 'string' ? d.locationLabel : null
+        const takenAtIso = typeof d.takenAtIso === 'string' ? d.takenAtIso : null
+        if (!metadataCid || !photoCid || lat == null || lon == null) return
+        setSelectedPin({ metadataCid, photoCid, lat, lon, locationLabel, takenAtIso })
+        setCardForceClosed(true)
+      } catch {}
+    }
+    window.addEventListener('sunsettings:pinSelected', onPin as EventListener)
+    return () => window.removeEventListener('sunsettings:pinSelected', onPin as EventListener)
+  }, [])
+
+  const closeSelectedPin = React.useCallback(() => {
+    setSelectedPin(null)
+    // Minimize via closeSignal, but release forceClosed so it is clickable
+    setCardForceClosed(false)
+    setCardCloseSignal((n) => n + 1)
+  }, [])
+
+  // Load scores from metadata JSON for the selected pin
+  const [metaScores, setMetaScores] = React.useState<{
+    scorePercent?: number | null
+    scoreLabel?: string | null
+    userScorePercent?: number | null
+    userScoreLabel?: string | null
+  } | null>(null)
+  React.useEffect(() => {
+    let aborted = false
+    async function loadMeta() {
+      try {
+        if (!selectedPin?.metadataCid) { setMetaScores(null); return }
+        const gw = (process.env.NEXT_PUBLIC_PINATA_GATEWAY || 'https://tan-mad-gorilla-689.mypinata.cloud').replace(/\/$/, '')
+        const res = await fetch(`${gw}/ipfs/${selectedPin.metadataCid}`, { cache: 'force-cache' })
+        const raw: unknown = await res.json().catch(() => null)
+        if (aborted || !raw || typeof raw !== 'object') { setMetaScores(null); return }
+        const j = raw as Record<string, unknown>
+        const sp = typeof j.sunsetScorePercent === 'number' ? j.sunsetScorePercent as number : null
+        const sl = typeof j.sunsetScoreLabel === 'string' ? j.sunsetScoreLabel as string : null
+        const usp = typeof j.userSunsetScorePercent === 'number' ? j.userSunsetScorePercent as number : null
+        const usl = typeof j.userSunsetScoreLabel === 'string' ? j.userSunsetScoreLabel as string : null
+        setMetaScores({ scorePercent: sp, scoreLabel: sl, userScorePercent: usp, userScoreLabel: usl })
+      } catch {
+        if (!aborted) setMetaScores(null)
+      }
+    }
+    if (selectedPin) loadMeta()
+    return () => { aborted = true }
+  }, [selectedPin])
+
+  const SelectedPhotoPanel: React.FC = React.useCallback(() => {
+    if (!selectedPin) return null
+    const scorePercent = metaScores?.scorePercent ?? null
+    const userScorePercent = metaScores?.userScorePercent ?? null
+    const scoreLabel = metaScores?.scoreLabel ?? null
+    const userScoreLabel = metaScores?.userScoreLabel ?? null
+    const taken = selectedPin.takenAtIso ? new Date(selectedPin.takenAtIso).toLocaleString() : ''
+    return (
+      <div className="pointer-events-auto">
+        <Card className="relative overflow-hidden p-0">
+          <button
+            aria-label="Close"
+            onClick={closeSelectedPin}
+            className="absolute right-2 top-2 z-10 h-10 w-10 rounded-full bg-black/70 text-white text-2xl leading-none flex items-center justify-center"
+          >
+            ×
+          </button>
+          <div className="relative w-full bg-black">
+            <div className="pt-[100%]" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`${process.env.NEXT_PUBLIC_PINATA_GATEWAY || 'https://tan-mad-gorilla-689.mypinata.cloud'}/ipfs/${selectedPin.photoCid}`}
+              alt={selectedPin.locationLabel || 'Photo'}
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+          </div>
+          <div className="px-3 py-2">
+            {selectedPin.locationLabel && (
+              <div className="text-sm font-medium leading-snug truncate">{selectedPin.locationLabel}</div>
+            )}
+            {taken && (
+              <div className="text-xs opacity-80 mt-0.5">{taken}</div>
+            )}
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <div className="flex flex-col">
+                <span className="text-[11px] opacity-80">Prediction</span>
+                <span className="font-semibold">
+                  {typeof scorePercent === 'number' ? `${Math.round(scorePercent)}%` : '—'}
+                  {scoreLabel ? <span className="opacity-70"> ({String(scoreLabel)})</span> : null}
+                </span>
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-[11px] opacity-80">User score</span>
+                <span className="font-semibold">
+                  {typeof userScorePercent === 'number' ? `${Math.round(userScorePercent)}%` : '—'}
+                  {userScoreLabel ? <span className="opacity-70"> ({String(userScoreLabel)})</span> : null}
+                </span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )
+  }, [selectedPin, closeSelectedPin, metaScores])
 
   React.useEffect(() => {
     locationLabelRef.current = locationLabel
@@ -175,10 +333,14 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
 
   return (
     <div
-      className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 w-[min(92vw,640px)]"
-      style={{ bottom: "10vh" }}
+      className={selectedPin
+        ? "pointer-events-none fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-[min(92vw,640px)]"
+        : "pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 w-[min(92vw,640px)]"}
+      style={{ bottom: selectedPin ? undefined : "10vh" }}
+      data-past={isPastSunset ? '1' : '0'}
     >
       <div className="pointer-events-auto space-y-3">
+        {selectedPin && <SelectedPhotoPanel />}
         {locationMismatch && (
           <Alert className="mb-2">
             <AlertTitle>Location mismatch</AlertTitle>
@@ -187,39 +349,43 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
             </AlertDescription>
           </Alert>
         )}
-        <FlipCard
-          location={locationLabel}
-          probability={probability}
-          description={description}
-          loading={loading}
-          error={error}
-          forceClosed={cardForceClosed}
-          closeSignal={cardCloseSignal}
-          sunsetText={sunsetText}
-        />
-        <UploadPhotoPanel
-          locationLabel={locationLabel}
-          coords={{ lat: latNum, lon: lonNum }}
-          onLocationMismatchChange={setLocationMismatch}
-          scoreLabel={(function(){
-            const p = typeof probability === "number" ? probability : null
-            if (p === null) return undefined
-            if (p <= 30) return "Horrible"
-            if (p <= 50) return "Poor"
-            if (p <= 70) return "Okay"
-            if (p <= 90) return "Great"
-            return "Fabulous"
-          })()}
-          scorePercent={typeof probability === "number" ? probability : undefined}
-          onOpenPicker={() => { setCardForceClosed(true) }}
-          onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
-          onUploaded={() => setCardForceClosed(true)}
-          onReset={() => setCardForceClosed(false)}
-          onCloseRequested={() => {
-            setCardForceClosed(false)
-            setCardCloseSignal((n) => n + 1)
-          }}
-        />
+        {!selectedPin && (
+          <>
+            <FlipCard
+              location={locationLabel}
+              probability={probability}
+              description={description}
+              loading={loading}
+              error={error}
+              forceClosed={cardForceClosed}
+              closeSignal={cardCloseSignal}
+              sunsetText={sunsetText}
+            />
+            <UploadPhotoPanel
+              locationLabel={locationLabel}
+              coords={{ lat: latNum, lon: lonNum }}
+              onLocationMismatchChange={setLocationMismatch}
+              scoreLabel={(function(){
+                const p = typeof probability === 'number' ? probability : null
+                if (p === null) return undefined
+                if (p <= 30) return 'Horrible'
+                if (p <= 50) return 'Poor'
+                if (p <= 70) return 'Okay'
+                if (p <= 90) return 'Great'
+                return 'Fabulous'
+              })()}
+              scorePercent={typeof probability === 'number' ? probability : undefined}
+              onOpenPicker={() => { setCardForceClosed(true) }}
+              onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
+              onUploaded={() => setCardForceClosed(true)}
+              onReset={() => setCardForceClosed(false)}
+              onCloseRequested={() => {
+                setCardForceClosed(false)
+                setCardCloseSignal((n) => n + 1)
+              }}
+            />
+          </>
+        )}
       </div>
     </div>
   )
