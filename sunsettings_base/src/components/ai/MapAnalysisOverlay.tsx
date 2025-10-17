@@ -41,7 +41,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const latNum = latStr ? Number(latStr) : undefined
   const lonNum = lonStr ? Number(lonStr) : undefined
 
-  // Resolve location label from cache or fallback to coordinates
   React.useEffect(() => {
     const cached = buildLocationLabelFromCache()
     if (cached) setLocationLabel(cached)
@@ -53,7 +52,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     locationLabelRef.current = locationLabel
   }, [locationLabel])
 
-  // Schedule a midnight-local reset so we re-run analysis next day
   React.useEffect(() => {
     const now = new Date()
     const nextMidnight = new Date(now)
@@ -66,7 +64,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     return () => window.clearTimeout(t)
   }, [])
 
-  // Shared weather summary builder via server-cached API
   const buildWeatherFeatures = React.useCallback(async (lat: number, lon: number): Promise<{ summary: string; sunsetUtc: string | null; sunsetLocal: string | null }> => {
     try {
       const res = await fetch(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { cache: "no-store" })
@@ -81,7 +78,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     }
   }, [])
 
-  // Dedupe/debounce analysis on coordinate changes
   const inFlightRef = React.useRef<Promise<void> | null>(null)
   const lastKeyRef = React.useRef<string | null>(null)
   const lastAtRef = React.useRef<number>(0)
@@ -96,7 +92,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     const ymd = new Date().toISOString().slice(0, 10)
     const key = `${round(latNum as number)},${round(lonNum as number)}:${ymd}`
 
-    // Skip if just ran with same key very recently (2s)
     if (lastKeyRef.current === key && Date.now() - lastAtRef.current < 2000) {
       return () => { cancelled = true }
     }
@@ -117,9 +112,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
         try {
           const wf = await buildWeatherFeatures(latNum as number, lonNum as number)
           const weatherSummary = wf.summary
-          // Display location-local sunset time (HH:MM) from API
           setSunsetText(wf.sunsetLocal || "")
-          // If it's past sunset for today, skip analysis
           if (wf.sunsetUtc) {
             try {
               const nowMs = Date.now()
@@ -170,7 +163,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     }
   }, [latNum, lonNum, buildWeatherFeatures])
 
-  // Hide on ESC
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setVisible(false)
@@ -178,6 +170,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
+
   if (!visible) return <></>
 
   return (
@@ -204,32 +197,29 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           closeSignal={cardCloseSignal}
           sunsetText={sunsetText}
         />
-        {!isPastSunset && (
-          <UploadPhotoPanel
-            locationLabel={locationLabel}
-            coords={{ lat: latNum, lon: lonNum }}
-            onLocationMismatchChange={setLocationMismatch}
-            scoreLabel={(function(){
-              const p = typeof probability === "number" ? probability : null
-              if (p === null) return undefined
-              if (p <= 30) return "Horrible"
-              if (p <= 50) return "Poor"
-              if (p <= 70) return "Okay"
-              if (p <= 90) return "Great"
-              return "Fabulous"
-            })()}
-            scorePercent={typeof probability === "number" ? probability : undefined}
-            onOpenPicker={() => { setCardForceClosed(true) }}
-            onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
-            onUploaded={() => setCardForceClosed(true)}
-            onReset={() => setCardForceClosed(false)}
-            onCloseRequested={() => {
-              // Do not hide the uploader; just close FlipCard if needed
-              setCardForceClosed(false)
-              setCardCloseSignal((n) => n + 1)
-            }}
-          />
-        )}
+        <UploadPhotoPanel
+          locationLabel={locationLabel}
+          coords={{ lat: latNum, lon: lonNum }}
+          onLocationMismatchChange={setLocationMismatch}
+          scoreLabel={(function(){
+            const p = typeof probability === "number" ? probability : null
+            if (p === null) return undefined
+            if (p <= 30) return "Horrible"
+            if (p <= 50) return "Poor"
+            if (p <= 70) return "Okay"
+            if (p <= 90) return "Great"
+            return "Fabulous"
+          })()}
+          scorePercent={typeof probability === "number" ? probability : undefined}
+          onOpenPicker={() => { setCardForceClosed(true) }}
+          onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
+          onUploaded={() => setCardForceClosed(true)}
+          onReset={() => setCardForceClosed(false)}
+          onCloseRequested={() => {
+            setCardForceClosed(false)
+            setCardCloseSignal((n) => n + 1)
+          }}
+        />
       </div>
     </div>
   )

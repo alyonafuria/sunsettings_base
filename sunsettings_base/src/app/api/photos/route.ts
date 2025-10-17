@@ -15,6 +15,33 @@ interface PinListRow {
   }
 }
 
+// Direct search utility: find metadata pins by a specific photoCid stored in keyvalues
+async function fetchPinListByPhotoCid(photoCid: string, pageOffset: number, limit: number): Promise<PinListRow[]> {
+  const url = new URL("https://api.pinata.cloud/data/pinList")
+  url.searchParams.set("status", "pinned")
+  url.searchParams.set("pageLimit", limit.toString())
+  url.searchParams.set("pageOffset", pageOffset.toString())
+  url.searchParams.set("includeCount", "false")
+  url.searchParams.set("includeMetadata", "true")
+  // Filter by keyvalue photoCid to locate the metadata JSON for that photo
+  url.searchParams.set("metadata[keyvalues][photoCid]", photoCid)
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${PINATA_JWT}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(`Pinata pinList by photoCid failed with status ${res.status}`)
+  }
+
+  const payload = await res.json().catch(() => null)
+  const rows = Array.isArray(payload?.rows) ? payload.rows : []
+  return rows
+}
+
 interface PhotoMetadata {
   metadataCid: string
   photoCid: string
@@ -22,6 +49,10 @@ interface PhotoMetadata {
   lon: number
   locationLabel: string | null
   takenAtIso: string | null
+  scorePercent?: number | null
+  scoreLabel?: string | null
+  userScorePercent?: number | null
+  userScoreLabel?: string | null
 }
 
 // Parse a numeric string into number or null
@@ -46,6 +77,10 @@ function fromKeyvalues(row: PinListRow): PhotoMetadata | null {
     lon,
     locationLabel: typeof kv.photoLocationLabel === "string" ? kv.photoLocationLabel : null,
     takenAtIso: typeof kv.photoCreatedAt === "string" ? kv.photoCreatedAt : (typeof kv.takenAt === "string" ? kv.takenAt : null),
+    scorePercent: parseNumStr(kv.scorePercent ?? kv.sunsetScorePercent),
+    scoreLabel: typeof kv.scoreLabel === "string" ? kv.scoreLabel : (typeof kv.sunsetScoreLabel === "string" ? kv.sunsetScoreLabel : null),
+    userScorePercent: parseNumStr(kv.userScorePercent ?? kv.userSunsetScorePercent),
+    userScoreLabel: typeof kv.userScoreLabel === "string" ? kv.userScoreLabel : (typeof kv.userSunsetScoreLabel === "string" ? kv.userSunsetScoreLabel : null),
   }
 }
 
@@ -59,16 +94,20 @@ type MetaJson = {
   photoLocationLabel?: string
   photoCreatedAt?: string
   takenAt?: string
+  sunsetScorePercent?: number
+  sunsetScoreLabel?: string
+  userSunsetScorePercent?: number
+  userSunsetScoreLabel?: string
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null
 }
 
-async function fetchPinList(pageOffset: number): Promise<PinListRow[]> {
+async function fetchPinList(pageOffset: number, limit: number): Promise<PinListRow[]> {
   const url = new URL("https://api.pinata.cloud/data/pinList")
   url.searchParams.set("status", "pinned")
-  url.searchParams.set("pageLimit", PAGE_LIMIT.toString())
+  url.searchParams.set("pageLimit", limit.toString())
   url.searchParams.set("pageOffset", pageOffset.toString())
   url.searchParams.set("includeCount", "false")
   url.searchParams.set("includeMetadata", "true")
@@ -128,6 +167,10 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
         : typeof data.takenAt === "string"
         ? data.takenAt
         : null,
+    scorePercent: typeof data.sunsetScorePercent === "number" ? data.sunsetScorePercent : null,
+    scoreLabel: typeof data.sunsetScoreLabel === "string" ? data.sunsetScoreLabel : null,
+    userScorePercent: typeof data.userSunsetScorePercent === "number" ? data.userSunsetScorePercent : null,
+    userScoreLabel: typeof data.userSunsetScoreLabel === "string" ? data.userSunsetScoreLabel : null,
   }
 }
 
@@ -135,6 +178,8 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const targetPhotoCid = url.searchParams.get("photoCid")?.trim() || null
   const targetMetadataCid = url.searchParams.get("metadataCid")?.trim() || null
+  const effectivePageLimit = Math.max(1, Math.min(100, Number(url.searchParams.get("pageLimit")) || PAGE_LIMIT))
+  const effectiveMaxPages = Math.max(1, Math.min(200, Number(url.searchParams.get("maxPages")) || MAX_PAGES))
 
   if (!PINATA_JWT) {
     return NextResponse.json({ error: "PINATA_JWT not configured" }, { status: 500 })
@@ -161,19 +206,31 @@ export async function GET(request: NextRequest) {
   const items: PhotoMetadata[] = []
   let foundTarget = false
 
-  for (let page = 0; page < MAX_PAGES; page += 1) {
-    const pageOffset = page * PAGE_LIMIT
+  for (let page = 0; page < effectiveMaxPages; page += 1) {
+    const pageOffset = page * effectivePageLimit
     let rows: PinListRow[] = []
     try {
-      rows = await fetchPinList(pageOffset)
+      rows = await fetchPinList(pageOffset, effectivePageLimit)
     } catch (err) {
       return NextResponse.json({ error: (err as Error).message }, { status: 502 })
     }
 
     if (rows.length === 0) break
 
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        console.log("[photos] page", page, "rows", rows.length, {
+          sample: rows.slice(0, 3).map(r => ({
+            cid: r?.ipfs_pin_hash,
+            name: r?.metadata?.name,
+            kvKeys: r?.metadata?.keyvalues ? Object.keys(r.metadata.keyvalues).slice(0,5) : [],
+          }))
+        })
+      } catch {}
+    }
+
     // Phase 2: prefer keyvalues (fast path), fallback to gateway for a small number per page
-    const FALLBACK_PER_PAGE = PAGE_LIMIT
+    const FALLBACK_PER_PAGE = effectivePageLimit
 
     // First, try to read from keyvalues
     for (const row of rows) {
@@ -218,11 +275,30 @@ export async function GET(request: NextRequest) {
             items.push(meta)
           }
         }
+        if (process.env.NODE_ENV !== 'production') {
+          try {
+            console.log("[photos] page", page, "resolved from gateway", resolved.filter(Boolean).length)
+          } catch {}
+        }
       }
     }
 
     if (foundTarget) break
-    if (rows.length < PAGE_LIMIT) break
+    if (rows.length < effectivePageLimit) break
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      console.log("[photos] total items returned", items.length, {
+        sample: items.slice(0, 5).map(i => ({
+          metadataCid: i.metadataCid,
+          photoCid: i.photoCid,
+          lat: i.lat,
+          lon: i.lon,
+          hasScores: !!(i.scorePercent != null || i.userScorePercent != null),
+        }))
+      })
+    } catch {}
   }
 
   return NextResponse.json(
