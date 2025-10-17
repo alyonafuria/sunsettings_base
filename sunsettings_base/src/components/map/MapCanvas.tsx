@@ -5,6 +5,7 @@ import * as mapboxgl from "mapbox-gl"
 import { applyHighContrastBW } from "@/components/map/applyHighContrastBW"
 import { getMapboxToken, MAPBOX_TOKEN_MISSING_MSG, getMapboxStyle } from "@/config/keys"
 import "mapbox-gl/dist/mapbox-gl.css"
+ 
 
 const DEFAULT_PINATA_GATEWAY = "https://tan-mad-gorilla-689.mypinata.cloud"
 const PINATA_GATEWAY = (process.env.NEXT_PUBLIC_PINATA_GATEWAY || DEFAULT_PINATA_GATEWAY).replace(/\/$/, "")
@@ -118,17 +119,18 @@ export default function MapCanvas({
 
   const reloadPins = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/photos", { cache: "no-store" })
+      const res = await fetch("/api/photos?pageLimit=50&maxPages=20", { cache: "no-store" })
       if (!res.ok) throw new Error(`photos api ${res.status}`)
       const json = await res.json().catch(() => null)
       const items: unknown[] = Array.isArray(json?.items) ? json.items : []
-      const mapped = items.filter(isPhotoPin).map((item) => ({
+      const mapped = (items.filter(isPhotoPin) as PhotoPin[]).map((item) => ({
         metadataCid: item.metadataCid,
         photoCid: item.photoCid,
         lat: item.lat,
         lon: item.lon,
         locationLabel: item.locationLabel,
         takenAtIso: item.takenAtIso,
+        previewUrl: item.previewUrl ?? null,
       }))
       setPhotoPins((prev) => {
         const byId = new Map(prev.map((p) => [p.metadataCid, p]))
@@ -156,18 +158,19 @@ export default function MapCanvas({
         if (cached && !cancelled) {
           setPhotoPins(dedupePins(cached))
         }
-        const res = await fetch("/api/photos", { cache: "no-store", signal: controller.signal })
+        const res = await fetch("/api/photos?pageLimit=50&maxPages=20", { cache: "no-store", signal: controller.signal })
         if (!res.ok) throw new Error(`photos api ${res.status}`)
         const json = await res.json().catch(() => null)
         const items: unknown[] = Array.isArray(json?.items) ? json.items : []
         if (!cancelled) {
-          const mapped = items.filter(isPhotoPin).map((item) => ({
+          const mapped = (items.filter(isPhotoPin) as PhotoPin[]).map((item) => ({
             metadataCid: item.metadataCid,
             photoCid: item.photoCid,
             lat: item.lat,
             lon: item.lon,
             locationLabel: item.locationLabel,
             takenAtIso: item.takenAtIso,
+            previewUrl: item.previewUrl ?? null,
           }))
           setPhotoPins((prev) => {
             const byId = new Map(prev.map((p) => [p.metadataCid, p]))
@@ -237,13 +240,14 @@ export default function MapCanvas({
           if (res.ok) {
             const json = await res.json().catch(() => null)
             const items: unknown[] = Array.isArray(json?.items) ? json.items : []
-            const mapped = items.filter(isPhotoPin).map((item) => ({
+            const mapped = (items.filter(isPhotoPin) as PhotoPin[]).map((item) => ({
               metadataCid: item.metadataCid,
               photoCid: item.photoCid,
               lat: item.lat,
               lon: item.lon,
               locationLabel: item.locationLabel,
               takenAtIso: item.takenAtIso,
+              previewUrl: item.previewUrl ?? null,
             }))
             if (mapped.length) {
               setPhotoPins((prev) => {
@@ -526,7 +530,6 @@ export default function MapCanvas({
       try { previewMarkerRef.current.remove() } catch {}
       previewMarkerRef.current = null
     }
-
     const z = map.getZoom()
     const jitterMeters = jitterRadiusForZoom(z)
     photoPins.forEach((pin) => {
@@ -587,6 +590,17 @@ export default function MapCanvas({
         const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([j.lon, j.lat])
           .addTo(map)
+
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation()
+          try {
+            // Center on pin and announce selection to UI overlay
+            try { map.easeTo({ center: [pin.lon, pin.lat], duration: 500 }) } catch {}
+            try {
+              window.dispatchEvent(new CustomEvent('sunsettings:pinSelected', { detail: pin }))
+            } catch {}
+          } catch {}
+        })
 
         markersRef.current.push(marker)
       } catch (err) {
