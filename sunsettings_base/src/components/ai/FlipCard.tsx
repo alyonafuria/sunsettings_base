@@ -13,6 +13,7 @@ export interface FlipCardProps {
   className?: string
   forceClosed?: boolean
   closeSignal?: number
+  sunsetText?: string
 }
 
 export default function FlipCard({
@@ -24,6 +25,7 @@ export default function FlipCard({
   className,
   forceClosed,
   closeSignal,
+  sunsetText,
 }: FlipCardProps) {
   const [isFlipped, setIsFlipped] = React.useState(false)
   const [isClosed, setIsClosed] = React.useState(false)
@@ -110,7 +112,7 @@ export default function FlipCard({
     <div
       className={[
         "mx-auto animate-in fade-in-50",
-        isClosed ? "w-28 h-16" : "w-full h-48",
+        isClosed ? "w-28 h-16" : "w-full h-44",
         className ?? "",
       ].join(" ")}
       style={rootStyle}
@@ -123,7 +125,7 @@ export default function FlipCard({
         {/* Maximize button removed per design */}
         {/* Front */}
         <div style={{ ...faceStyle, pointerEvents: isFlipped ? "none" : undefined }}>
-          <Card className="relative w-full h-full px-6 py-9 flex flex-col justify-center items-center">
+          <Card className="relative w-full h-full px-5 py-6 flex flex-col justify-center items-center">
             {!isClosed && !isFlipped && (
               <button
                 onClick={(e) => {
@@ -148,14 +150,17 @@ export default function FlipCard({
               ) : (
                 showContent ? (
                   <>
-                    <div className="text-sm font-medium mb-1 opacity-90 leading-snug">Today in {location || "—"}</div>
-                    <div className="text-3xl font-bold mb-2 leading-tight">Sunset Beauty</div>
+                    {sunsetText && (
+                      <div className="text-[11px] opacity-70 mb-0.5">Sunset: {sunsetText}</div>
+                    )}
+                    <div className="text-[13px] font-medium mb-1 opacity-90 leading-snug">Today in {location || "—"}</div>
+                    <div className="text-2xl font-bold mb-1 leading-tight">Sunset Beauty</div>
                     <div className="relative">
-                      <div className="text-6xl font-extrabold leading-none">
+                      <div className="text-5xl font-extrabold leading-none">
                         {shownProb}
                       </div>
                     </div>
-                    <div className="mt-1 text-sm font-medium opacity-85 leading-snug">
+                    <div className="mt-0.5 text-[13px] font-medium opacity-85 leading-snug">
                       {(function(){
                         if (typeof probability !== 'number') return '—'
                         const p = probability
@@ -166,9 +171,9 @@ export default function FlipCard({
                         return 'Fabulous'
                       })()}
                     </div>
-                    <p className="mt-1 text-sm opacity-80 leading-snug">{loading ? "Analyzing the sunset…" : "Tap card for details"}</p>
+                    <p className="mt-0.5 text-[12px] opacity-75 leading-snug">{loading ? "Analyzing the sunset…" : "Tap card for details"}</p>
                     {!loading && typeof probability === "number" && probability === 0 && (
-                      <p className="text-[10px] text-muted-foreground mt-1">No data</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">No data</p>
                     )}
                   </>
                 ) : null
