@@ -566,7 +566,9 @@ export default function UploadPhotoPanel({
       // pass score/location to server so it can be stored in Pinata metadata keyvalues
       if (typeof scorePercent === "number") fd.append("scorePercent", String(scorePercent))
       if (scoreLabel) fd.append("scoreLabel", scoreLabel)
-      if (locationLabel) fd.append("locationLabel", locationLabel)
+      // Prefer the pre-capture detected label; fallback to analysis label prop
+      const kvLabel = photoLocationLabel ?? locationLabel
+      if (kvLabel) fd.append("locationLabel", kvLabel)
       if (typeof userScore === "number") fd.append("userScorePercent", String(userScore))
       const up = await fetch("/api/pinata/upload-file", { method: "POST", body: fd })
       type UploadFileResponse = { ok?: boolean; cid?: string; pinata?: Record<string, unknown>; error?: string }
