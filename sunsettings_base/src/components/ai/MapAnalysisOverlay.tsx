@@ -4,6 +4,7 @@ import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import FlipCard from "@/components/ai/FlipCard"
 import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
  
 
 function buildLocationLabelFromCache(): string | null {
@@ -29,6 +30,10 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const locationLabelRef = React.useRef<string>("")
   const [cardForceClosed, setCardForceClosed] = React.useState(false)
   const [cardCloseSignal, setCardCloseSignal] = React.useState(0)
+  const [sunsetText, setSunsetText] = React.useState<string>("")
+  const [isPastSunset, setIsPastSunset] = React.useState(false)
+  const [dayBump, setDayBump] = React.useState(0)
+  const [locationMismatch, setLocationMismatch] = React.useState(false)
 
   // Derive lat/lon from URL for display fallback
   const latStr = sp.get("lat")
@@ -42,22 +47,37 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     if (cached) setLocationLabel(cached)
     else if (latStr && lonStr) setLocationLabel(`${latStr}, ${lonStr}`)
     else setLocationLabel("")
-  }, [latStr, lonStr])
+  }, [latStr, lonStr, dayBump])
 
   React.useEffect(() => {
     locationLabelRef.current = locationLabel
   }, [locationLabel])
 
+  // Schedule a midnight-local reset so we re-run analysis next day
+  React.useEffect(() => {
+    const now = new Date()
+    const nextMidnight = new Date(now)
+    nextMidnight.setHours(24, 0, 0, 0)
+    const ms = nextMidnight.getTime() - now.getTime()
+    const t = window.setTimeout(() => {
+      setIsPastSunset(false)
+      setDayBump((n) => n + 1)
+    }, Math.max(1000, ms))
+    return () => window.clearTimeout(t)
+  }, [])
+
   // Shared weather summary builder via server-cached API
-  const buildWeatherFeatures = React.useCallback(async (lat: number, lon: number): Promise<string> => {
+  const buildWeatherFeatures = React.useCallback(async (lat: number, lon: number): Promise<{ summary: string; sunsetUtc: string | null; sunsetLocal: string | null }> => {
     try {
       const res = await fetch(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { cache: "no-store" })
-      if (!res.ok) return ""
+      if (!res.ok) return { summary: "", sunsetUtc: null, sunsetLocal: null }
       const data = await res.json().catch(() => null)
       const ws = typeof data?.weatherSummary === "string" ? data.weatherSummary : ""
-      return ws
+      const sunsetUtc = typeof data?.sunsetUtc === "string" ? data.sunsetUtc : null
+      const sunsetLocal = typeof data?.sunsetLocal === "string" ? data.sunsetLocal : null
+      return { summary: ws, sunsetUtc, sunsetLocal }
     } catch {
-      return ""
+      return { summary: "", sunsetUtc: null, sunsetLocal: null }
     }
   }, [])
 
@@ -95,7 +115,28 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
       setError(null)
       inFlightRef.current = (async () => {
         try {
-          const weatherSummary = await buildWeatherFeatures(latNum as number, lonNum as number)
+          const wf = await buildWeatherFeatures(latNum as number, lonNum as number)
+          const weatherSummary = wf.summary
+          // Display location-local sunset time (HH:MM) from API
+          setSunsetText(wf.sunsetLocal || "")
+          // If it's past sunset for today, skip analysis
+          if (wf.sunsetUtc) {
+            try {
+              const nowMs = Date.now()
+              const sunMs = Date.parse(wf.sunsetUtc)
+              if (Number.isFinite(sunMs) && nowMs > sunMs) {
+                if (!cancelled) {
+                  setIsPastSunset(true)
+                  setProbability(null)
+                  setDescription("you missed sunset today, go to sleep and try tomorrow")
+                  setLoading(false)
+                }
+                return
+              }
+              setIsPastSunset(false)
+            } catch {}
+          }
+          setIsPastSunset(false)
           const res = await fetch("/api/sunset-analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -145,6 +186,14 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
       style={{ bottom: "10vh" }}
     >
       <div className="pointer-events-auto space-y-3">
+        {locationMismatch && (
+          <Alert className="mb-2">
+            <AlertTitle>Location mismatch</AlertTitle>
+            <AlertDescription>
+              Locations of the sunset forecast and photo capture differ. Please re-run analysis for your current location.
+            </AlertDescription>
+          </Alert>
+        )}
         <FlipCard
           location={locationLabel}
           probability={probability}
@@ -153,30 +202,34 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           error={error}
           forceClosed={cardForceClosed}
           closeSignal={cardCloseSignal}
+          sunsetText={sunsetText}
         />
-        <UploadPhotoPanel
-          locationLabel={locationLabel}
-          coords={{ lat: latNum, lon: lonNum }}
-          scoreLabel={(function(){
-            const p = typeof probability === "number" ? probability : null
-            if (p === null) return undefined
-            if (p <= 30) return "Horrible"
-            if (p <= 50) return "Poor"
-            if (p <= 70) return "Okay"
-            if (p <= 90) return "Great"
-            return "Fabulous"
-          })()}
-          scorePercent={typeof probability === "number" ? probability : undefined}
-          onOpenPicker={() => { setCardForceClosed(true) }}
-          onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
-          onUploaded={() => setCardForceClosed(true)}
-          onReset={() => setCardForceClosed(false)}
-          onCloseRequested={() => {
-            // Do not hide the uploader; just close FlipCard if needed
-            setCardForceClosed(false)
-            setCardCloseSignal((n) => n + 1)
-          }}
-        />
+        {!isPastSunset && (
+          <UploadPhotoPanel
+            locationLabel={locationLabel}
+            coords={{ lat: latNum, lon: lonNum }}
+            onLocationMismatchChange={setLocationMismatch}
+            scoreLabel={(function(){
+              const p = typeof probability === "number" ? probability : null
+              if (p === null) return undefined
+              if (p <= 30) return "Horrible"
+              if (p <= 50) return "Poor"
+              if (p <= 70) return "Okay"
+              if (p <= 90) return "Great"
+              return "Fabulous"
+            })()}
+            scorePercent={typeof probability === "number" ? probability : undefined}
+            onOpenPicker={() => { setCardForceClosed(true) }}
+            onUploadingChange={(u) => { if (u) setCardForceClosed(true) }}
+            onUploaded={() => setCardForceClosed(true)}
+            onReset={() => setCardForceClosed(false)}
+            onCloseRequested={() => {
+              // Do not hide the uploader; just close FlipCard if needed
+              setCardForceClosed(false)
+              setCardCloseSignal((n) => n + 1)
+            }}
+          />
+        )}
       </div>
     </div>
   )

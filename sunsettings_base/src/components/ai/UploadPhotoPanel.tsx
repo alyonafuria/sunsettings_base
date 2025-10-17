@@ -27,9 +27,10 @@ export default function UploadPhotoPanel({
   onReset,
   onOpenPicker,
   onCloseRequested,
+  coords,
+  onLocationMismatchChange,
 }: {
   locationLabel: string
-  coords?: { lat?: number; lon?: number }
   scoreLabel?: string
   scorePercent?: number
   onUploadingChange?: (uploading: boolean) => void
@@ -37,6 +38,8 @@ export default function UploadPhotoPanel({
   onReset?: () => void
   onOpenPicker?: () => void
   onCloseRequested?: () => void
+  coords?: { lat?: number; lon?: number }
+  onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
   const [file, setFile] = React.useState<File | null>(null)
   const [uploading, setUploading] = React.useState(false)
@@ -52,7 +55,6 @@ export default function UploadPhotoPanel({
   const [photoLocationLabel, setPhotoLocationLabel] = React.useState<string | null>(null)
   const [labelLoading, setLabelLoading] = React.useState(false)
   const [takenAtIso, setTakenAtIso] = React.useState<string | null>(null)
-  const [exifDialogDismissed, setExifDialogDismissed] = React.useState(false)
   const [isMobile, setIsMobile] = React.useState(false)
   const [gpsFix, setGpsFix] = React.useState<{ lat: number; lon: number; accuracy?: number; fixAtIso: string } | null>(null)
   const [gpsFixing, setGpsFixing] = React.useState(false)
@@ -62,6 +64,7 @@ export default function UploadPhotoPanel({
   const [deviceId, setDeviceId] = React.useState<string | null>(null)
   const [captureTimestamp, setCaptureTimestamp] = React.useState<string | null>(null)
   const [prehashSha256, setPrehashSha256] = React.useState<string | null>(null)
+  const [locationMismatch, setLocationMismatch] = React.useState(false)
 
   const resetUpload = () => {
     setFile(null)
@@ -78,6 +81,31 @@ export default function UploadPhotoPanel({
     }, 0)
   }
 
+  // Re-evaluate mismatch whenever gpsFix or analysis coords change
+  React.useEffect(() => {
+    try {
+      const COARSE_RES = 4
+      const analysisLat = coords?.lat
+      const analysisLon = coords?.lon
+      if (gpsFix && typeof analysisLat === 'number' && typeof analysisLon === 'number') {
+        const a = toH3(analysisLat, analysisLon, COARSE_RES)
+        const p = toH3(gpsFix.lat, gpsFix.lon, COARSE_RES)
+        const mismatchNow = a !== p
+        if (mismatchNow !== locationMismatch) {
+          setLocationMismatch(mismatchNow)
+          onLocationMismatchChange?.(mismatchNow)
+        }
+      } else {
+        if (locationMismatch) {
+          setLocationMismatch(false)
+          onLocationMismatchChange?.(false)
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [gpsFix, coords?.lat, coords?.lon, locationMismatch, onLocationMismatchChange])
+
   const closePanel = () => {
     if (fileInputRef.current) fileInputRef.current.value = ""
     setPreviewUrl(null)
@@ -92,7 +120,6 @@ export default function UploadPhotoPanel({
     setPhotoLocationLabel(null)
     setTakenAtIso(null)
     setLabelLoading(false)
-    setExifDialogDismissed(false)
     onCloseRequested?.()
   }
 
@@ -145,6 +172,25 @@ export default function UploadPhotoPanel({
         const center = centerOf(h3)
         setPhotoH3Index(h3)
         setPhotoCellCenter(center)
+        // Evaluate location mismatch at a coarse H3 resolution (state/region scale)
+        try {
+          const COARSE_RES = 4
+          const analysisLat = coords?.lat
+          const analysisLon = coords?.lon
+          if (typeof analysisLat === 'number' && typeof analysisLon === 'number') {
+            const a = toH3(analysisLat, analysisLon, COARSE_RES)
+            const p = toH3(lat, lon, COARSE_RES)
+            const mismatchNow = a !== p
+            setLocationMismatch(mismatchNow)
+            onLocationMismatchChange?.(mismatchNow)
+          } else {
+            setLocationMismatch(false)
+            onLocationMismatchChange?.(false)
+          }
+        } catch {
+          setLocationMismatch(false)
+          onLocationMismatchChange?.(false)
+        }
         setLabelLoading(true)
         try {
           const res = await fetch("/api/geocode/reverse", {
@@ -247,7 +293,7 @@ export default function UploadPhotoPanel({
                 setCaptureTimestamp((new Date()).toISOString())
                 fileInputRef.current?.click()
               }}
-              disabled={uploading || !gpsFix || gpsFixing}
+              disabled={uploading || !gpsFix || gpsFixing || locationMismatch}
             >
               <span>Take photo</span>
             </Button>
@@ -305,8 +351,8 @@ export default function UploadPhotoPanel({
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setExifDialogDismissed(true)}>Close</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => { setExifDialogDismissed(false); resetUpload() }}>Upload new photo</AlertDialogAction>
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                        <AlertDialogAction onClick={resetUpload}>Upload new photo</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
