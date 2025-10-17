@@ -78,18 +78,19 @@ export default function Weather({ lat, lon }: { lat?: number | null; lon?: numbe
     async function run() {
       if (typeof lat === "number" && typeof lon === "number") {
         setLoading(true)
-        // Fetch raw JSON once to show it, and compute summary separately
+        setRaw(null)
+        let s = ""
         try {
-          const today = new Date()
-          const dateParam = today.toISOString().slice(0, 10)
-          const url = `https://api.brightsky.dev/weather?date=${lat && lon ? dateParam : ""}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`
-          const res = await fetch(url)
-          const json: unknown = res.ok ? await res.json() : { error: `HTTP ${res.status}` }
-          if (alive) setRaw(json)
+          const res = await fetch(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { cache: "no-store" })
+          if (res.ok) {
+            const data = await res.json().catch(() => null)
+            s = typeof data?.weatherSummary === "string" ? data.weatherSummary : ""
+          } else {
+            s = ""
+          }
         } catch {
-          if (alive) setRaw({ error: "fetch failed" })
+          s = ""
         }
-        const s = await fetchHourlyWeather(lat, lon)
         if (alive) {
           setSummary(s)
           setLoading(false)
@@ -120,7 +121,22 @@ export default function Weather({ lat, lon }: { lat?: number | null; lon?: numbe
       <button
         type="button"
         className="underline text-foreground/80 hover:text-foreground"
-        onClick={() => setOpen((v) => !v)}
+        onClick={async () => {
+          setOpen((v) => !v)
+          const next = !open
+          if (next && raw === null && typeof lat === "number" && typeof lon === "number") {
+            try {
+              const today = new Date()
+              const dateParam = today.toISOString().slice(0, 10)
+              const url = `https://api.brightsky.dev/weather?date=${dateParam}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`
+              const res = await fetch(url)
+              const json: unknown = res.ok ? await res.json() : { error: `HTTP ${res.status}` }
+              setRaw(json)
+            } catch {
+              setRaw({ error: "fetch failed" })
+            }
+          }
+        }}
       >
         {open ? "Hide raw JSON" : "Show raw JSON"}
       </button>

@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { parseGpsFromFile, parseTakenAtFromFile } from "@/lib/exif"
 import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3"
 
 export default function UploadPhotoPanel({
@@ -45,8 +44,6 @@ export default function UploadPhotoPanel({
   const [photoCid, setPhotoCid] = React.useState<string | null>(null)
   const [metaCid, setMetaCid] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
-  const fileInputCameraRef = React.useRef<HTMLInputElement | null>(null)
-  const fileInputLibraryRef = React.useRef<HTMLInputElement | null>(null)
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
   const [userDecision, setUserDecision] = React.useState<"yes" | "no" | null>(null)
   const [userScore, setUserScore] = React.useState<number | null>(null)
@@ -56,15 +53,15 @@ export default function UploadPhotoPanel({
   const [labelLoading, setLabelLoading] = React.useState(false)
   const [takenAtIso, setTakenAtIso] = React.useState<string | null>(null)
   const [exifDialogDismissed, setExifDialogDismissed] = React.useState(false)
+  const [isMobile, setIsMobile] = React.useState(false)
+  const [gpsFix, setGpsFix] = React.useState<{ lat: number; lon: number; accuracy?: number; fixAtIso: string } | null>(null)
+  const [gpsFixing, setGpsFixing] = React.useState(false)
+  const [gpsError, setGpsError] = React.useState<string | null>(null)
   const [geoLoading, setGeoLoading] = React.useState(false)
   const [geoError, setGeoError] = React.useState<string | null>(null)
-
-  // Basic client-side detection to tailor primary action
-  const isMobile = React.useMemo(() => {
-    if (typeof navigator === "undefined") return false
-    const ua = (navigator.userAgent || (navigator as Navigator & { vendor?: string }).vendor || "").toLowerCase()
-    return /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(ua)
-  }, [])
+  const [deviceId, setDeviceId] = React.useState<string | null>(null)
+  const [captureTimestamp, setCaptureTimestamp] = React.useState<string | null>(null)
+  const [prehashSha256, setPrehashSha256] = React.useState<string | null>(null)
 
   const resetUpload = () => {
     setFile(null)
@@ -72,8 +69,6 @@ export default function UploadPhotoPanel({
     setMetaCid(null)
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
-    if (fileInputCameraRef.current) fileInputCameraRef.current.value = ""
-    if (fileInputLibraryRef.current) fileInputLibraryRef.current.value = ""
     onReset?.()
     // Immediately open the picker again
     onOpenPicker?.()
@@ -101,6 +96,83 @@ export default function UploadPhotoPanel({
     onCloseRequested?.()
   }
 
+  React.useEffect(() => {
+    try {
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : ""
+      const coarse = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(pointer: coarse)").matches : false
+      const mobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || coarse
+      setIsMobile(mobile)
+    } catch {
+      setIsMobile(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    try {
+      const existing = typeof localStorage !== "undefined" ? localStorage.getItem("sunsettings_device_id") : null
+      if (existing) setDeviceId(existing)
+      else {
+        const id = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+          ? crypto.randomUUID()
+          : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+        setDeviceId(id)
+        try { localStorage.setItem("sunsettings_device_id", id) } catch {}
+      }
+    } catch {}
+  }, [])
+
+  async function detectLocation() {
+    if (gpsFix) return
+    setGpsError(null)
+    setGpsFixing(true)
+    try {
+      if (!("geolocation" in navigator)) throw new Error("Geolocation not available")
+      const pos: GeolocationPosition = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+      })
+      const lat = pos.coords.latitude
+      const lon = pos.coords.longitude
+      const accuracy = pos.coords.accuracy
+      const fixAtIso = new Date().toISOString()
+      setGpsFix({ lat, lon, accuracy, fixAtIso })
+      // Immediately set H3/center and resolve label for map & metadata
+      try {
+        const h3 = toH3(lat, lon, DEFAULT_H3_RES)
+        const center = centerOf(h3)
+        setPhotoH3Index(h3)
+        setPhotoCellCenter(center)
+        setLabelLoading(true)
+        try {
+          const res = await fetch("/api/geocode/reverse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: center.lat, lon: center.lon }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            setPhotoLocationLabel(typeof data?.label === "string" && data.label.trim().length ? data.label : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`)
+          } else {
+            setPhotoLocationLabel(`${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`)
+          }
+        } finally {
+          setLabelLoading(false)
+        }
+      } catch {
+        // if H3 fails for any reason, still provide a fallback label from raw lat/lon
+        setPhotoLocationLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`)
+      }
+    } catch (e) {
+      setGpsError((e as Error)?.message || "Location failed")
+      setGpsFix(null)
+    } finally {
+      setGpsFixing(false)
+    }
+  }
+
   // File input change handler (hoisted)
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null
@@ -109,134 +181,80 @@ export default function UploadPhotoPanel({
     if (f) {
       const url = URL.createObjectURL(f)
       setPreviewUrl(url)
+      setCaptureTimestamp((new Date()).toISOString())
       // default: wait for user decision; reset prior choices
       setUserDecision(null)
       setUserScore(null)
-      // derive photo location from EXIF -> H3 -> reverse geocode
+      // compute prehash and set takenAt from captureTimestamp or file's lastModified; do NOT clear pre-captured location
       ;(async () => {
-        setPhotoH3Index(null)
-        setPhotoCellCenter(null)
-        setPhotoLocationLabel(null)
-        setTakenAtIso(null)
+        // Compute prehash immediately using file bytes + gps fix + capture timestamp
         try {
-          const [gps, taken] = await Promise.all([
-            parseGpsFromFile(f),
-            parseTakenAtFromFile(f),
-          ])
-          if (taken) setTakenAtIso(taken)
-          if (gps) {
-            const h3 = toH3(gps.lat, gps.lon, DEFAULT_H3_RES)
-            const center = centerOf(h3)
-            setPhotoH3Index(h3)
-            setPhotoCellCenter(center)
-            // Notify map to show a temporary preview pin immediately (before reverse geocode)
-            try {
-              window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
-                detail: {
-                  lat: center.lat,
-                  lon: center.lon,
-                  locationLabel: null,
-                  takenAtIso: takenAtIso ?? null,
-                  previewUrl: url,
-                }
-              }))
-            } catch {}
-            // reverse geocode center via our API
-            setLabelLoading(true)
-            try {
-              const res = await fetch("/api/geocode/reverse", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ lat: center.lat, lon: center.lon }),
-              })
-              if (res.ok) {
-                const data = await res.json()
-                if (data?.label) setPhotoLocationLabel(data.label)
-                else setPhotoLocationLabel(null)
-              } else {
-                setPhotoLocationLabel(null)
-              }
-            } finally {
-              setLabelLoading(false)
-            }
-            // Optionally send an update with resolved label (non-critical)
-            try {
-              window.dispatchEvent(new CustomEvent("sunsettings:photoPreview", {
-                detail: {
-                  lat: center.lat,
-                  lon: center.lon,
-                  locationLabel: photoLocationLabel ?? null,
-                  takenAtIso: takenAtIso ?? null,
-                  previewUrl: url,
-                }
-              }))
-            } catch {}
-          } else {
-            setPhotoLocationLabel(null)
+          const capIso = (captureTimestamp || new Date().toISOString())
+          const gps = gpsFix
+          const buf = await f.arrayBuffer()
+          const metaObj = {
+            lat: gps?.lat ?? null,
+            lon: gps?.lon ?? null,
+            accuracy: gps?.accuracy ?? null,
+            gpsFixAtIso: gps?.fixAtIso ?? null,
+            captureTimestamp: capIso,
           }
+          const enc = new TextEncoder()
+          const metaBytes = enc.encode(JSON.stringify(metaObj))
+          const all = new Uint8Array(buf.byteLength + metaBytes.byteLength)
+          all.set(new Uint8Array(buf), 0)
+          all.set(metaBytes, new Uint8Array(buf).length)
+          const digest = await crypto.subtle.digest("SHA-256", all)
+          const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("")
+          setPrehashSha256(hex)
         } catch {
-          setPhotoLocationLabel(null)
+          setPrehashSha256(null)
         }
+        // takenAtIso: prefer captureTimestamp; fallback to file lastModified
+        const fallbackTaken = new Date(f.lastModified).toISOString()
+        setTakenAtIso(captureTimestamp || fallbackTaken)
       })()
     } else {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       setPreviewUrl(null)
       setUserDecision(null)
       setUserScore(null)
-      setPhotoH3Index(null)
-      setPhotoCellCenter(null)
-      setPhotoLocationLabel(null)
     }
   }
 
-  // No file chosen yet: show only a centered "Add photo" button (no Card wrapper)
   if (!file && !photoCid) {
+    if (!isMobile) return null
     return (
       <>
-        {/* Hidden inputs: one for camera, one for gallery/files */}
         <input
-          ref={fileInputCameraRef}
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
           onChange={onFileChange}
         />
-        <input
-          ref={fileInputLibraryRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onFileChange}
-        />
-        <div className="w-full flex justify-center mx-auto">
-          {isMobile ? (
+        <div className="w-full flex flex-col items-center gap-2 mx-auto">
+          <div className="flex gap-2">
+            <Button type="button" variant="neutral" onClick={detectLocation} disabled={gpsFixing || !!gpsFix}>
+              {gpsFixing ? "Detecting…" : (gpsFix ? "Location locked" : "Detect location")}
+            </Button>
             <Button
               type="button"
               variant="neutral"
               onClick={() => {
                 onOpenPicker?.()
-                fileInputCameraRef.current?.click()
+                setCaptureTimestamp((new Date()).toISOString())
+                fileInputRef.current?.click()
               }}
-              disabled={uploading}
+              disabled={uploading || !gpsFix || gpsFixing}
             >
               <span>Take photo</span>
             </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="neutral"
-              onClick={() => {
-                onOpenPicker?.()
-                fileInputLibraryRef.current?.click()
-              }}
-              disabled={uploading}
-            >
-              <span>Upload photo</span>
-            </Button>
-          )}
+          </div>
+          {gpsError && <div className="text-xs text-center">{gpsError}</div>}
+          {error && <div className="text-xs text-center">{error}</div>}
         </div>
-        {error && <div className="text-xs text-center">{error}</div>}
       </>
     )
   }
@@ -491,6 +509,14 @@ export default function UploadPhotoPanel({
       const photoName = `sunsettings_photo_${safeTaken}_${photoH3Index || "noh3"}${photoExt}`
       fd.append("name", photoName)
       console.debug("[upload] sending file", { name: file.name, size: file.size, type: file.type })
+      // tamper-proof extras
+      if (deviceId) fd.append("deviceId", deviceId)
+      if (gpsFix?.lat != null) fd.append("gpsLat", String(gpsFix.lat))
+      if (gpsFix?.lon != null) fd.append("gpsLon", String(gpsFix.lon))
+      if (typeof gpsFix?.accuracy === "number") fd.append("gpsAccuracy", String(gpsFix.accuracy))
+      if (gpsFix?.fixAtIso) fd.append("gpsFixAtIso", gpsFix.fixAtIso)
+      if (captureTimestamp) fd.append("captureTimestamp", captureTimestamp)
+      if (prehashSha256) fd.append("prehashSha256", prehashSha256)
       // pass score/location to server so it can be stored in Pinata metadata keyvalues
       if (typeof scorePercent === "number") fd.append("scorePercent", String(scorePercent))
       if (scoreLabel) fd.append("scoreLabel", scoreLabel)
@@ -546,17 +572,29 @@ export default function UploadPhotoPanel({
       } else {
         // upload metadata JSON exactly once when none exists yet
         const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
-        const hasExifNow = Boolean(photoH3Index)
-        const locationLabelForMeta = hasExifNow
-          ? (photoLocationLabel || null)
-          : (exifDialogDismissed ? "" : null)
+        // For location we now ALWAYS use the pre-capture gpsFix (button), not EXIF.
+        // Compute H3/center from gpsFix (button requires gpsFix before capture)
+        const lat = gpsFix?.lat as number
+        const lon = gpsFix?.lon as number
+        const h3 = toH3(lat, lon, DEFAULT_H3_RES)
+        const center = centerOf(h3)
+        const label = (photoLocationLabel && photoLocationLabel.trim().length)
+          ? photoLocationLabel
+          : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`
         const metadata = {
           walletAddress: "", // TODO: fill when wallet integration is ready
           photoCid: upJson.cid,
-          photoLocationLabel: locationLabelForMeta,
-          photoH3Index: photoH3Index || null,
-          photoCellCenterLat: photoCellCenter?.lat ?? null,
-          photoCellCenterLon: photoCellCenter?.lon ?? null,
+          photoLocationLabel: label,
+          photoH3Index: h3,
+          photoCellCenterLat: center.lat,
+          photoCellCenterLon: center.lon,
+          gpsSource: "pre_capture",
+          // Tamper/attestation fields mirrored into JSON for self-containment
+          deviceId: deviceId || "",
+          gpsFixAtIso: gpsFix?.fixAtIso || "",
+          gpsAccuracy: typeof gpsFix?.accuracy === "number" ? gpsFix.accuracy : 0,
+          captureTimestamp: captureTimestamp || "",
+          prehashSha256: prehashSha256 || "",
           sunsetScorePercent: typeof scorePercent === "number" ? scorePercent : null,
           sunsetScoreLabel: scoreLabel || null,
           userSunsetScorePercent: typeof userScore === "number" ? userScore : null,
