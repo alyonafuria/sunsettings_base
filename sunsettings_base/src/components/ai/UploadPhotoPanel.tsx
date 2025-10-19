@@ -588,37 +588,7 @@ export default function UploadPhotoPanel({
       setPhotoCid(upJson.cid)
       onUploaded?.(upJson.cid)
 
-      let existingMetaCid: string | null = null
-      try {
-        const lookupRes = await fetch(`/api/photos?photoCid=${encodeURIComponent(upJson.cid)}`, { cache: "no-store" })
-        if (lookupRes.ok) {
-          const lookupJson = await lookupRes.json().catch(() => null)
-          const existing = Array.isArray(lookupJson?.items) ? lookupJson.items[0] : null
-          if (existing && typeof existing.metadataCid === "string") {
-            existingMetaCid = existing.metadataCid
-          }
-        }
-      } catch {
-        existingMetaCid = null
-      }
-
-      if (existingMetaCid) {
-        setMetaCid(existingMetaCid)
-        try {
-          window.dispatchEvent(new CustomEvent("sunsettings:photoUploaded", {
-            detail: {
-              photoCid: upJson.cid,
-              metadataCid: existingMetaCid,
-              lat: photoCellCenter?.lat ?? null,
-              lon: photoCellCenter?.lon ?? null,
-              locationLabel: photoLocationLabel ?? null,
-              takenAtIso: takenAtIso ?? null,
-              previewUrl: previewUrl || null,
-            }
-          }))
-        } catch {}
-      } else {
-        // upload metadata JSON exactly once when none exists yet
+      {
         const photoCreatedAt = file ? new Date(file.lastModified).toISOString() : null
         // For location we now ALWAYS use the pre-capture gpsFix (button), not EXIF.
         // Compute H3/center from gpsFix (button requires gpsFix before capture)

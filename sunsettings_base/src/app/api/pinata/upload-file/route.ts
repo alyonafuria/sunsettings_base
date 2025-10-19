@@ -29,35 +29,27 @@ export async function POST(req: Request) {
     const upstream = new FormData()
     upstream.append("file", file, file.name || "upload.jpg")
     if (
-      name || scorePercentStr || scoreLabel || locationLabel || userScorePercentStr ||
-      deviceId || gpsLat || gpsLon || gpsAccuracy || gpsFixAtIso || captureTimestamp || prehashSha256
+      name || deviceId || captureTimestamp || prehashSha256
     ) {
       // Pinata expects this as a plain string field containing JSON
       const keyvalues: Record<string, string> = {}
-      if (scorePercentStr) keyvalues.sunsetScorePercent = scorePercentStr
-      if (scoreLabel) keyvalues.sunsetScoreLabel = scoreLabel
-      // Standardized keys consumed by read path
-      if (locationLabel) {
-        keyvalues.photoLocationLabel = locationLabel
+      const addKv = (key: string, value: string | undefined) => {
+        if (!value) return
+        if (Object.keys(keyvalues).length >= 10) return
+        keyvalues[key] = value
       }
-      if (userScorePercentStr) keyvalues.userSunsetScorePercent = userScorePercentStr
-      if (deviceId) keyvalues.deviceId = deviceId
-      if (gpsLat) {
-        keyvalues.photoCellCenterLat = gpsLat
-      }
-      if (gpsLon) {
-        keyvalues.photoCellCenterLon = gpsLon
-      }
-      if (gpsAccuracy) keyvalues.gpsAccuracy = gpsAccuracy
-      if (gpsFixAtIso) keyvalues.gpsFixAtIso = gpsFixAtIso
-      if (captureTimestamp) {
-        keyvalues.photoCreatedAt = captureTimestamp
-      }
-      if (prehashSha256) keyvalues.prehashSha256 = prehashSha256
+
+      // Keep only minimal debug fields on the FILE pin; all discovery fields live on the JSON metadata pin
+      addKv("deviceId", deviceId)
+      addKv("photoCreatedAt", captureTimestamp)
+      addKv("prehashSha256", prehashSha256)
       type PinataMetadata = { name?: string; keyvalues?: Record<string, string> }
-      // Ensure the name is discoverable by listing filter
+      // Enforce a consistent 'sunsettings_photo_*' prefix for the FILE pin name
       const ts = new Date().toISOString().replace(/[:.]/g, "-")
-      const finalName = name && name.includes("sunsettings_meta") ? name : `sunsettings_meta_${ts}.jpg`
+      const rawName = (typeof name === 'string' && name.trim().length) ? name.trim() : (file.name || '')
+      const extMatch = /\.([a-z0-9]{2,5})$/i.exec(rawName)
+      const ext = extMatch ? `.${extMatch[1].toLowerCase()}` : '.jpg'
+      const finalName = rawName.startsWith('sunsettings_photo') ? rawName : `sunsettings_photo_${ts}${ext}`
       const meta: PinataMetadata = { name: finalName }
       if (Object.keys(keyvalues).length) meta.keyvalues = keyvalues
       upstream.append("pinataMetadata", JSON.stringify(meta))

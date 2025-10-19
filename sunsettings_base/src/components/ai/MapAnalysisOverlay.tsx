@@ -275,7 +275,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
             try {
               const nowMs = Date.now()
               const sunMs = Date.parse(wf.sunsetUtc)
-              if (Number.isFinite(sunMs) && nowMs > sunMs) {
+              const cutoffMs = Number.isFinite(sunMs) ? (sunMs + 60 * 60 * 1000) : NaN
+              if (Number.isFinite(cutoffMs) && nowMs > cutoffMs) {
                 if (!cancelled) {
                   setIsPastSunset(true)
                   setProbability(null)
