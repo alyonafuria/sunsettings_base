@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import Link from "next/link";
 import { Menubar } from "@/components/ui/menubar";
 import "./globals.css";
+import { Providers } from './providers';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -61,21 +62,23 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${suseMono.variable} antialiased h-screen overflow-hidden`}
       >
-        <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
-          <div className="flex w-full items-center">
-            <div className="flex-1" />
-            <Link
-              href="/"
-              className={`flex-1 text-center ${sunsettingsHeadline.className} text-white text-5xl md:text-4xl leading-none tracking-tight`}
-            >
-              sunsettings
-            </Link>
-            <nav className="flex-1" />
-          </div>
-        </Menubar>
-        <main className="relative z-10  overflow-hidden">
-          {children}
-        </main>
+        <Providers>
+          <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
+            <div className="flex w-full items-center">
+              <div className="flex-1" />
+              <Link
+                href="/"
+                className={`flex-1 text-center ${sunsettingsHeadline.className} text-white text-5xl md:text-4xl leading-none tracking-tight`}
+              >
+                sunsettings
+              </Link>
+              <nav className="flex-1" />
+            </div>
+          </Menubar>
+          <main className="relative z-10  overflow-hidden">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );
