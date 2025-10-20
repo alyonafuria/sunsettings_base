@@ -1,0 +1,9 @@
+# Hardhat artifacts
+artifacts/
+cache/
+
+yarn.lock
+pnpm-lock.yaml
+
+# env
+.env

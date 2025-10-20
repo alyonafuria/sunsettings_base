@@ -7,6 +7,8 @@ import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
  
+const ALLOW_UPLOAD_AFTER_SUNSET = process.env.NEXT_PUBLIC_DEBUG_ALLOW_UPLOAD_AFTER_SUNSET === "true"
+
 
 function buildLocationLabelFromCache(): string | null {
   if (typeof window === "undefined") return null
@@ -271,7 +273,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           const wf = await buildWeatherFeatures(latNum as number, lonNum as number)
           const weatherSummary = wf.summary
           setSunsetText(wf.sunsetLocal || "")
-          if (wf.sunsetUtc) {
+          if (!ALLOW_UPLOAD_AFTER_SUNSET && wf.sunsetUtc) {
             try {
               const nowMs = Date.now()
               const sunMs = Date.parse(wf.sunsetUtc)
