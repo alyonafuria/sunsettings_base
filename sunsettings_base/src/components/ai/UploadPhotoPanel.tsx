@@ -865,7 +865,43 @@ export default function UploadPhotoPanel({
           throw new Error("NFT contract address not configured");
         if (!isAddress(NFT_CONTRACT_ADDRESS))
           throw new Error("Invalid NFT contract address configured");
+        // Marketplace-friendly fields
+        const capturedIso = (captureTimestamp && captureTimestamp.length)
+          ? captureTimestamp
+          : taken;
+        const capturedUnix = Math.floor(new Date(capturedIso).getTime() / 1000);
+        const nameStr = `Sunsettings Photo — ${label}`;
+        const description = `A sunset photo captured near ${label}.`;
+        const attributes: Array<Record<string, unknown>> = [];
+        const pushAttr = (a: Record<string, unknown> | null | undefined) => {
+          if (!a) return;
+          if (a.value === null || a.value === undefined || a.value === "") return;
+          attributes.push(a);
+        };
+        pushAttr({ trait_type: "Location", value: label });
+        pushAttr({ trait_type: "H3 Index", value: h3 });
+        pushAttr({ trait_type: "Cell Center Lat", value: Number(center.lat.toFixed(6)) });
+        pushAttr({ trait_type: "Cell Center Lon", value: Number(center.lon.toFixed(6)) });
+        pushAttr({ trait_type: "GPS Source", value: "pre_capture" });
+        pushAttr({ trait_type: "Device ID", value: deviceId || "" });
+        if (typeof gpsFix?.accuracy === "number") {
+          pushAttr({ trait_type: "GPS Accuracy (m)", value: gpsFix.accuracy });
+        }
+        pushAttr({ display_type: "date", trait_type: "Captured At", value: capturedUnix });
+        if (typeof scorePercent === "number") {
+          pushAttr({ trait_type: "Sunset Score", value: scorePercent, max_value: 100 });
+        }
+        if (typeof userScore === "number") {
+          pushAttr({ trait_type: "User Sunset Score", value: userScore, max_value: 100 });
+        }
+
         const metadata = {
+          // OpenSea/Rarible fields
+          name: nameStr,
+          description,
+          image: `ipfs://${upJson.cid}`,
+          attributes,
+          // Existing custom fields (preserved)
           walletAddress: accountAddress,
           photoCid: upJson.cid,
           photoLocationLabel: label,
