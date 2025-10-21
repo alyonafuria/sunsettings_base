@@ -628,7 +628,7 @@ export default function MapCanvas({
     <>
       <div
         ref={containerRef}
-        className="fixed top-16 left-0 w-screen h-[calc(100vh-4rem)] z-10 bg-[#e5e7eb]"
+        className="relative top-0 left-0 w-screen h-[calc(100vh-4rem)] z-10 bg-[#e5e7eb]"
       />
     </>
   )

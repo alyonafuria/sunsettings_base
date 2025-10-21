@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useAccount, useConnect } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import Image from "next/image"
@@ -41,6 +42,14 @@ export default function UploadPhotoPanel({
   coords?: { lat?: number; lon?: number }
   onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
+  const { isConnected } = useAccount()
+  const { connectors, connectAsync, status: connectStatus } = useConnect()
+  const connectCoinbase = async () => {
+    try {
+      const coinbase = connectors.find((c) => /coinbase/i.test(c.name))
+      await connectAsync({ connector: coinbase ?? connectors[0] })
+    } catch {}
+  }
   const [file, setFile] = React.useState<File | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -444,8 +453,11 @@ export default function UploadPhotoPanel({
                   <div className="text-sm">Photo uploaded successfully</div>
                 </div>
               ) : (
-                typeof scorePercent === "number" && (
+                (
                   <div className="text-center space-y-2">
+                    {!isConnected && (
+                      <div className="text-xs opacity-80">You need to sign up / log in to submit a photo.</div>
+                    )}
                     <div className="text-sm">Agree with the score?</div>
                     <div className="flex justify-center gap-2">
                       <Button
@@ -465,7 +477,6 @@ export default function UploadPhotoPanel({
                         onClick={() => {
                           setUserDecision("no")
                           setUserScore(null)
-                          // no-op
                         }}
                         disabled={uploading}
                       >
@@ -482,21 +493,30 @@ export default function UploadPhotoPanel({
                           step={1}
                           onValueChange={(vals) => {
                             setUserScore(vals?.[0] ?? null)
-                            // no-op
                           }}
-                          // slider stays interactive until submit
                         />
                         <div className="mt-1 text-xs">Your score: {typeof userScore === "number" ? `${userScore}%` : "—"}</div>
                       </div>
                     )}
+
                     <div className="pt-2 flex justify-center gap-2">
-                      <Button
-                        type="button"
-                        onClick={onUpload}
-                        disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}
-                      >
-                        {uploading ? "Submitting…" : "Submit"}
-                      </Button>
+                      {isConnected ? (
+                        <Button
+                          type="button"
+                          onClick={onUpload}
+                          disabled={!file || uploading || (typeof scorePercent === "number" ? userScore === null : false)}
+                        >
+                          {uploading ? "Submitting…" : "Submit"}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={connectCoinbase}
+                          disabled={connectStatus === 'pending'}
+                        >
+                          {connectStatus === 'pending' ? 'Connecting…' : 'Sign up / Log in'}
+                        </Button>
+                      )}
                       {!uploading && (
                         <Button
                           type="button"
