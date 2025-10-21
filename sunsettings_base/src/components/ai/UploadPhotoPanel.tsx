@@ -7,6 +7,13 @@ import { Slider } from "@/components/ui/slider"
 import Image from "next/image"
 import { HelpCircle } from "lucide-react"
 import {
+  Transaction,
+  TransactionButton,
+  TransactionStatus,
+  TransactionStatusAction,
+  TransactionStatusLabel,
+} from "@coinbase/onchainkit/transaction";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -42,7 +49,8 @@ export default function UploadPhotoPanel({
   coords?: { lat?: number; lon?: number }
   onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
-  const { isConnected } = useAccount()
+  const { address: connectedAddress, chainId, isConnected } = useAccount();
+  const currentChainId = chainId ?? 84532;
   const { connectors, connectAsync, status: connectStatus } = useConnect()
   const connectCoinbase = async () => {
     try {
@@ -277,6 +285,8 @@ export default function UploadPhotoPanel({
     }
   }
 
+  
+
   if (!file && !photoCid) {
     if (!isMobile) return null
     return (
@@ -449,8 +459,70 @@ export default function UploadPhotoPanel({
                   <div className="text-sm">Uploading…</div>
                 </div>
               ) : metaCid ? (
-                <div className="text-center py-2">
+                <div className="space-y-2">
                   <div className="text-sm">Photo uploaded successfully</div>
+                  {/* Sponsored mint via Coinbase OnchainKit Paymaster */}
+                  {(() => {
+                    const mintFn = process.env.NEXT_PUBLIC_SUNSET_NFT_MINT_FUNCTION?.trim() || "safeMint";
+                    const nftAddressSepolia = process.env.NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS as string | undefined;
+                    const nftAddressBase = process.env.NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS as string | undefined;
+                    const contractAddress = currentChainId === 8453 ? nftAddressBase : nftAddressSepolia;
+                    const mintAbi = [
+                      {
+                        type: "function",
+                        stateMutability: "nonpayable",
+                        name: mintFn,
+                        inputs: [
+                          { name: "to", type: "address" },
+                          { name: "tokenURI", type: "string" },
+                        ],
+                        outputs: [],
+                      },
+                    ];
+                    if (!isConnected) {
+                      return (
+                        <div className="space-y-2">
+                          <div className="text-xs opacity-80">Connect your wallet to mint.</div>
+                          <Button size="sm" onClick={connectCoinbase}>Connect wallet</Button>
+                        </div>
+                      );
+                    }
+                    if (!contractAddress) {
+                      const neededEnv = currentChainId === 8453
+                        ? 'NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS'
+                        : 'NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS';
+                      return (
+                        <div className="text-xs opacity-80">
+                          Missing contract env for this chain. Set <code>{neededEnv}</code> in <code>.env</code> and restart the app.
+                        </div>
+                      );
+                    }
+                    const contracts = [
+                      {
+                        address: contractAddress as `0x${string}`,
+                        abi: mintAbi as any,
+                        functionName: mintFn,
+                        args: [connectedAddress, `ipfs://${metaCid}`],
+                      },
+                    ];
+                    return (
+                      <Transaction
+                        isSponsored
+                        calls={contracts as any}
+                        className="w-full"
+                        chainId={currentChainId}
+                      >
+                        <TransactionButton
+                          className="mt-0 mr-auto ml-auto w-full border-2 border-black"
+                          text="Mint (gas covered)"
+                        />
+                        <TransactionStatus>
+                          <TransactionStatusLabel />
+                          <TransactionStatusAction />
+                        </TransactionStatus>
+                      </Transaction>
+                    );
+                  })()}
                 </div>
               ) : (
                 (
@@ -619,24 +691,38 @@ export default function UploadPhotoPanel({
         const label = (photoLocationLabel && photoLocationLabel.trim().length)
           ? photoLocationLabel
           : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`
+        // ERC-721 compatible metadata JSON
+        const shortId = (upJson.cid || "").slice(0, 8)
+        const name = `sunsettings #${shortId}`
+        const attributes = [
+          { trait_type: "sunsettings_score", value: typeof scorePercent === "number" ? scorePercent : null },
+          { trait_type: "user_score", value: typeof userScore === "number" ? userScore : null },
+          { trait_type: "location_label", value: label },
+          { trait_type: "h3_index", value: h3 },
+          { trait_type: "gps_accuracy_m", value: typeof gpsFix?.accuracy === "number" ? gpsFix.accuracy : null },
+          { trait_type: "captured_at", value: captureTimestamp || takenAtIso || photoCreatedAt || null },
+        ].filter((a) => a.value !== null && a.value !== undefined)
+
         const metadata = {
-          walletAddress: "", // TODO: fill when wallet integration is ready
-          photoCid: upJson.cid,
-          photoLocationLabel: label,
-          photoH3Index: h3,
-          photoCellCenterLat: center.lat,
-          photoCellCenterLon: center.lon,
-          gpsSource: "pre_capture",
-          // Tamper/attestation fields mirrored into JSON for self-containment
-          deviceId: deviceId || "",
-          gpsFixAtIso: gpsFix?.fixAtIso || "",
-          gpsAccuracy: typeof gpsFix?.accuracy === "number" ? gpsFix.accuracy : 0,
-          captureTimestamp: captureTimestamp || "",
-          prehashSha256: prehashSha256 || "",
-          sunsetScorePercent: typeof scorePercent === "number" ? scorePercent : null,
-          sunsetScoreLabel: scoreLabel || null,
-          userSunsetScorePercent: typeof userScore === "number" ? userScore : null,
-          photoCreatedAt,
+          name,
+          description: "we provide access to basic miracles",
+          external_url: "https://sunsettings.app",
+          image: `ipfs://${upJson.cid}`,
+          background_color: "000000",
+          attributes,
+          // Optional extra fields under a namespaced object
+          properties: {
+            photoLocationLabel: label,
+            photoH3Index: h3,
+            photoCellCenterLat: center.lat,
+            photoCellCenterLon: center.lon,
+            gpsSource: "pre_capture",
+            deviceId: deviceId || "",
+            gpsFixAtIso: gpsFix?.fixAtIso || "",
+            captureTimestamp: captureTimestamp || "",
+            prehashSha256: prehashSha256 || "",
+            photoCreatedAt,
+          },
         }
         const metaName = `sunsettings_meta_${safeTaken}_${photoH3Index || "noh3"}_${upJson.cid}`
         const meta = await fetch("/api/pinata/upload-json", {

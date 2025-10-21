@@ -58,6 +58,7 @@ function fromKeyvalues(row: PinListRow): PhotoMetadata | null {
 }
 
 type MetaJson = {
+  // legacy fields
   photoCellCenterLat?: number
   photoCellCenterLon?: number
   lat?: number
@@ -71,6 +72,10 @@ type MetaJson = {
   sunsetScoreLabel?: string
   userSunsetScorePercent?: number
   userSunsetScoreLabel?: string
+  // erc-721 fields
+  image?: string
+  attributes?: Array<{ trait_type?: string; value?: unknown }>
+  properties?: Record<string, unknown>
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -110,21 +115,26 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
   if (!isRecord(raw)) return null
   const data = raw as MetaJson
 
+  // latitude / longitude from legacy or properties
   const lat = typeof data.photoCellCenterLat === "number"
     ? data.photoCellCenterLat
     : typeof data.lat === "number"
     ? data.lat
-    : null
+    : (typeof data.properties?.photoCellCenterLat === "number" ? (data.properties as any).photoCellCenterLat : null)
   const lon = typeof data.photoCellCenterLon === "number"
     ? data.photoCellCenterLon
     : typeof data.lon === "number"
     ? data.lon
-    : null
-  const photoCid = typeof data.photoCid === "string"
+    : (typeof data.properties?.photoCellCenterLon === "number" ? (data.properties as any).photoCellCenterLon : null)
+  // photo CID from legacy photoCid/photo.cid or from image ipfs://
+  let photoCid = typeof data.photoCid === "string"
     ? data.photoCid
     : typeof data.photo?.cid === "string"
     ? data.photo.cid
     : null
+  if (!photoCid && typeof data.image === "string" && data.image.startsWith("ipfs://")) {
+    photoCid = data.image.slice(7)
+  }
 
   if (lat == null || lon == null || photoCid == null) return null
 
@@ -133,16 +143,22 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
     photoCid,
     lat,
     lon,
-    locationLabel: typeof data.photoLocationLabel === "string" ? data.photoLocationLabel : null,
+    locationLabel: typeof data.photoLocationLabel === "string"
+      ? data.photoLocationLabel
+      : (typeof data.properties?.photoLocationLabel === "string" ? (data.properties as any).photoLocationLabel : null),
     takenAtIso:
       typeof data.photoCreatedAt === "string"
         ? data.photoCreatedAt
         : typeof data.takenAt === "string"
         ? data.takenAt
-        : null,
-    scorePercent: typeof data.sunsetScorePercent === "number" ? data.sunsetScorePercent : null,
+        : (typeof data.properties?.photoCreatedAt === "string" ? (data.properties as any).photoCreatedAt : null),
+    scorePercent: typeof data.sunsetScorePercent === "number"
+      ? data.sunsetScorePercent
+      : (Array.isArray(data.attributes) ? (data.attributes.find(a => a.trait_type === "sunsettings_score")?.value as number | undefined) ?? null : null),
     scoreLabel: typeof data.sunsetScoreLabel === "string" ? data.sunsetScoreLabel : null,
-    userScorePercent: typeof data.userSunsetScorePercent === "number" ? data.userSunsetScorePercent : null,
+    userScorePercent: typeof data.userSunsetScorePercent === "number"
+      ? data.userSunsetScorePercent
+      : (Array.isArray(data.attributes) ? (data.attributes.find(a => a.trait_type === "user_score")?.value as number | undefined) ?? null : null),
     userScoreLabel: typeof data.userSunsetScoreLabel === "string" ? data.userSunsetScoreLabel : null,
   }
 }

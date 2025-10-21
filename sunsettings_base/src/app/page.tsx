@@ -3,7 +3,7 @@ import PrewarmPhotos from "@/components/PrewarmPhotos";
 
 export default function Home() {
   return (
-    <div className="relative top-16 h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
+    <div className="relative top-0 h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
       <PrewarmPhotos />
       {/* CSS-only background grid (replaces heavy Tiles component) */}
       <div

@@ -6,7 +6,7 @@ import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 
 export default function AccountPage() {
-  const { address, isConnecting, isConnected } = useAccount();
+  const { address, isConnecting, isConnected, chainId } = useAccount();
   const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
 
@@ -14,14 +14,27 @@ export default function AccountPage() {
   const [items, setItems] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    // TODO: when connected, fetch NFTs for this address and setItems([...])
-    if (!isConnected) {
-      setItems([]);
-      return;
-    }
-    // placeholder: keep empty until wired
-    setItems([]);
-  }, [isConnected, address]);
+    let aborted = false;
+    const run = async () => {
+      if (!isConnected || !address) {
+        setItems([]);
+        return;
+      }
+      try {
+        const chain = chainId ?? 84532;
+        const params = new URLSearchParams({ address, chainId: String(chain) });
+        const res = await fetch(`/api/wallet-nfts?${params.toString()}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!aborted) setItems(Array.isArray(data?.items) ? data.items : []);
+      } catch {
+        if (!aborted) setItems([]);
+      }
+    };
+    run();
+    return () => {
+      aborted = true;
+    };
+  }, [isConnected, address, chainId]);
 
   const connectCoinbase = async () => {
     try {
