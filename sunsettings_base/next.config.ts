@@ -17,6 +17,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Add permissive headers useful for certain wallet SDKs in dev (e.g. Coinbase Smart Wallet)
+  // so they can communicate with their companion app. These are safe for localhost.
+  // You can disable or tighten these in production if not needed.
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          { key: "Cross-Origin-Embedder-Policy", value: "unsafe-none" },
+        ],
+      },
+    ]
+  },
 };
 
 export default nextConfig;

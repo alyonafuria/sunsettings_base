@@ -62,16 +62,18 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} ${suseMono.variable} antialiased h-screen overflow-hidden`}>
         <WalletProviders>
-          <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
-            <div className="flex w-full items-center">
-              <div className="flex-1" />
-              <Link
-                href="/"
-                className={`flex-1 text-center ${sunsettingsHeadline.className} text-white text-5xl md:text-4xl leading-none tracking-tight`}
-              >
-                sunsettings
-              </Link>
-              <nav className="flex-1 flex justify-end">
+          <Menubar className="fixed left-0 right-0 top-0 h-16 px-3 z-20">
+            <div className="grid grid-cols-3 w-full items-center pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+              <div className="col-span-1" />
+              <div className="col-span-1 flex justify-center">
+                <Link
+                  href="/"
+                  className={`${sunsettingsHeadline.className} text-white text-2xl sm:text-3xl md:text-4xl leading-none tracking-tight whitespace-nowrap`}
+                >
+                  sunsettings
+                </Link>
+              </div>
+              <nav className="col-span-1 flex items-center justify-end">
                 <WalletStatus />
               </nav>
             </div>
