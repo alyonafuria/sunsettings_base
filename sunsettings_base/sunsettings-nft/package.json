@@ -6,8 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf cache artifacts",
-    "compile": "hardhat --config hardhat.config.js compile",
-    "deploy:base-sepolia": "hardhat --config hardhat.config.js run scripts/deploy.js --network baseSepolia"
+    "compile": "hardhat --config hardhat.config.ts compile",
+    "deploy:base-sepolia": "hardhat --config hardhat.config.ts run scripts/deploy.ts --network baseSepolia",
+    "deploy:base": "hardhat --config hardhat.config.ts run scripts/deploy.ts --network base"
   },
   "keywords": [],
   "author": "",

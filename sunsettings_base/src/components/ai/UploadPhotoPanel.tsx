@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { baseSepolia } from "viem/chains";
+import { baseSepolia, base } from "viem/chains";
 import { isAddress, type Abi, type Address, type Hash, type WalletClient } from "viem";
 import { useAccount, useWalletClient } from "wagmi";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3";
 
-const NFT_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_SUNSET_NFT_CONTRACT_ADDRESS;
+const NFT_ADDRESS_SEPOLIA =
+  process.env.NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS;
+const NFT_ADDRESS_BASE =
+  process.env.NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS;
 const NFT_MINT_FUNCTION =
   process.env.NEXT_PUBLIC_SUNSET_NFT_MINT_FUNCTION?.trim() || "safeMint";
 const NFT_MINT_ABI = [
@@ -39,14 +41,23 @@ const NFT_MINT_ABI = [
 ] satisfies Abi;
 
 const ACTIVE_CHAIN = baseSepolia;
-const BASE_BLOCK_EXPLORER_TX = "https://sepolia.basescan.org/tx";
+const EXPLORER_TX_BY_CHAIN: Record<number, string> = {
+  84532: "https://sepolia.basescan.org/tx",
+  8453: "https://basescan.org/tx",
+};
 async function mintPhotoWithWallet(
   metadataCid: string,
   account: Address,
   walletClient: WalletClient
 ): Promise<{ txHash: Hash; account: Address }> {
   if (!metadataCid) throw new Error("Missing metadata CID for minting");
-  const contractAddress = NFT_CONTRACT_ADDRESS;
+  const activeChainId = walletClient.chain?.id ?? ACTIVE_CHAIN.id;
+  const contractAddress =
+    activeChainId === 84532
+      ? NFT_ADDRESS_SEPOLIA
+      : activeChainId === 8453
+      ? NFT_ADDRESS_BASE
+      : NFT_ADDRESS_SEPOLIA ?? NFT_ADDRESS_BASE;
   if (!contractAddress) throw new Error("NFT contract address not configured");
   if (!isAddress(contractAddress))
     throw new Error("Invalid NFT contract address configured");
@@ -603,12 +614,12 @@ export default function UploadPhotoPanel({
                 <div className="text-sm">Photo pinned to IPFS</div>
                   {mintTxHash ? (
                   <a
-                    href={`${BASE_BLOCK_EXPLORER_TX}/${mintTxHash}`}
+                    href={`${EXPLORER_TX_BY_CHAIN[chainId ?? ACTIVE_CHAIN.id] ?? EXPLORER_TX_BY_CHAIN[84532]}/${mintTxHash}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs underline"
                   >
-                      NFT minted on Base Sepolia. View transaction →
+                      NFT minted on {chainId === 8453 ? "Base" : "Base Sepolia"}. View transaction →
                   </a>
                 ) : minting ? (
                     <div className="text-xs opacity-80">
@@ -861,10 +872,7 @@ export default function UploadPhotoPanel({
           photoLocationLabel && photoLocationLabel.trim().length
             ? photoLocationLabel
             : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
-        if (!NFT_CONTRACT_ADDRESS)
-          throw new Error("NFT contract address not configured");
-        if (!isAddress(NFT_CONTRACT_ADDRESS))
-          throw new Error("Invalid NFT contract address configured");
+        // Contract address checks are performed during mint. No need to validate here.
         // Marketplace-friendly fields
         const capturedIso = (captureTimestamp && captureTimestamp.length)
           ? captureTimestamp
