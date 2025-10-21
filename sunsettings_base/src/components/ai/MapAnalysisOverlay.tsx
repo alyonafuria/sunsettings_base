@@ -337,7 +337,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
       className={selectedPin
         ? "pointer-events-none fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-[min(92vw,640px)]"
         : "pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 w-[min(92vw,640px)]"}
-      style={{ bottom: selectedPin ? undefined : "10vh" }}
+      style={{ bottom: selectedPin ? undefined : "12vh" }}
       data-past={isPastSunset ? '1' : '0'}
     >
       <div className="pointer-events-auto space-y-3">

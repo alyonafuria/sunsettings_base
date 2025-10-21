@@ -75,9 +75,19 @@ export default function RootLayout({
               <nav className="flex-1" />
             </div>
           </Menubar>
-          <main className="relative z-10  overflow-hidden">
+          <main className="relative z-10 overflow-hidden pt-16 pb-16">
             {children}
           </main>
+          <Menubar className="fixed bottom-0 left-0 right-0 h-16 px-4 z-20 md:hidden border-t-2 border-black">
+            <nav className="flex h-full w-full">
+              <div className="flex-1 h-full flex items-center justify-center">
+                <Link href="/" className="text-sm font-medium">Home</Link>
+              </div>
+              <div className="flex-1 h-full flex items-center justify-center border-l-2 border-black">
+                <Link href="/account" className="text-sm font-medium">Account</Link>
+              </div>
+            </nav>
+          </Menubar>
         </Providers>
       </body>
     </html>
