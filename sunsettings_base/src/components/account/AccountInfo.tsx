@@ -5,6 +5,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import BoringAvatar from "boring-avatars";
+import { getRomanticNameForAddress } from "@/lib/romanticNames";
 
 export default function AccountInfo({
   loading,
@@ -61,7 +62,7 @@ export default function AccountInfo({
             <Skeleton className="h-4 w-1/3" />
           ) : (
             <div className="text-base font-semibold truncate">
-              {mask(wallet ?? address ?? null)}
+              {getRomanticNameForAddress(wallet ?? address ?? null)} · {mask(wallet ?? address ?? null)}
             </div>
           )}
           {loading ? (

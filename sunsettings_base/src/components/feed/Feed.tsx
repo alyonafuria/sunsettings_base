@@ -4,6 +4,7 @@ import * as React from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import BoringAvatar from "boring-avatars";
+import { getRomanticNameForAddress } from "@/lib/romanticNames";
 
 type FeedItem = {
   id: string;
@@ -117,7 +118,9 @@ export default function Feed() {
                     colors={["#ffe3b3", "#ff9a52", "#ff5252", "#c91e5a", "#3d2922"]}
                   />
                 </div>
-                <div className="flex-1 truncate text-sm font-medium">{mask(it.author)}</div>
+                <div className="flex-1 truncate text-sm font-medium">
+                  {getRomanticNameForAddress(it.author)} · {mask(it.author)}
+                </div>
                 <div className="opacity-50 text-lg leading-none select-none">⋯</div>
               </div>
               {/* Photo */}
@@ -136,7 +139,9 @@ export default function Feed() {
               {/* Footer metadata */}
               <div className="px-3 py-2 text-xs opacity-90">
                 <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                  <span className="font-medium">{mask(it.author)}</span>
+                  <span className="font-medium">{getRomanticNameForAddress(it.author)}</span>
+                  <span>·</span>
+                  <span className="opacity-90">{mask(it.author)}</span>
                   <span>•</span>
                   <span>
                     {new Date(it.time * 1000).toLocaleString(undefined, {
