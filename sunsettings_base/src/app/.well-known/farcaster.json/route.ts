@@ -6,10 +6,10 @@
 
 export async function GET() {
 return Response.json({
-  "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+   "accountAssociation": {
+    "header": "eyJmaWQiOjc1MTMsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgxMTA5MjFFMTg2YjQ2MDUwQmI0NUJhOThhMzRCMThhYzAxQzkwZUQ0In0",
+    "payload": "eyJkb21haW4iOiJjYXRjaC5zdW5zZXR0aW5ncy5hcHAifQ",
+    "signature": "1/Fc4pmYQqj22M+4yFElFX5in/jmtY6HvCzGl/edJSljq0XOzz41iFFabDbdWh1Ivg2uSqTzddPLrrdmPQ84Yxw="
   },
   "baseBuilder": {
     "allowedAddresses": ["0xC6a8Ba6F67C52f2F489069aa44570938334C11F6"]
