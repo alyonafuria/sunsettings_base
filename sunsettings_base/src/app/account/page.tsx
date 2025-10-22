@@ -7,7 +7,12 @@ import Gallery from "@/components/account/Gallery";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
-  const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
+  const {
+    connectors,
+    connectAsync,
+    status: connectStatus,
+    error: connectError,
+  } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
@@ -24,7 +29,9 @@ export default function AccountPage() {
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
-      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       setItems(Array.isArray(data?.items) ? data.items : []);
     } catch {
@@ -36,19 +43,25 @@ export default function AccountPage() {
 
   React.useEffect(() => {
     refetch();
-    const onVis: EventListener = () => { if (document.visibilityState === 'visible') refetch(); };
+    const onVis: EventListener = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
     const onMinted: EventListener = () => refetch();
-    const onPhotoUploaded: EventListener = () => setTimeout(() => refetch(), 1500);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('visibilitychange', onVis);
-      window.addEventListener('sunsettings:nftMinted', onMinted);
-      window.addEventListener('sunsettings:photoUploaded', onPhotoUploaded);
+    const onPhotoUploaded: EventListener = () =>
+      setTimeout(() => refetch(), 1500);
+    if (typeof window !== "undefined") {
+      window.addEventListener("visibilitychange", onVis);
+      window.addEventListener("sunsettings:nftMinted", onMinted);
+      window.addEventListener("sunsettings:photoUploaded", onPhotoUploaded);
     }
     return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('visibilitychange', onVis);
-        window.removeEventListener('sunsettings:nftMinted', onMinted);
-        window.removeEventListener('sunsettings:photoUploaded', onPhotoUploaded);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("visibilitychange", onVis);
+        window.removeEventListener("sunsettings:nftMinted", onMinted);
+        window.removeEventListener(
+          "sunsettings:photoUploaded",
+          onPhotoUploaded
+        );
       }
     };
   }, [refetch]);
@@ -78,7 +91,7 @@ export default function AccountPage() {
             className="mt-2 text-xs underline"
             disabled={loading}
           >
-            {loading ? 'Refreshing…' : 'Refresh'}
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -90,17 +103,21 @@ export default function AccountPage() {
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
-              <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
+              <div className="mb-2 text-sm">
+                Sign up / Log in to catch sunsets
+              </div>
               <button
                 type="button"
                 onClick={connectCoinbase}
                 className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
-                disabled={connectStatus === 'pending'}
+                disabled={connectStatus === "pending"}
               >
-                {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
+                {connectStatus === "pending" ? "Connecting…" : "Connect wallet"}
               </button>
               {connectError ? (
-                <div className="mt-2 text-xs text-red-600">{String(connectError.message || 'Connection failed')}</div>
+                <div className="mt-2 text-xs text-red-600">
+                  {String(connectError.message || "Connection failed")}
+                </div>
               ) : null}
             </div>
           </div>

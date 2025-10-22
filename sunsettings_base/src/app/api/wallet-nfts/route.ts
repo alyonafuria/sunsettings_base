@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], reason: "missing_contract_env" });
   }
 
-  const apiKey = process.env.ETHERSCAN_API_KEY || process.env.BASESCAN_API_KEY || "";
+  const apiKey =
+    process.env.ETHERSCAN_API_KEY || process.env.BASESCAN_API_KEY || "";
   const v2Params = new URLSearchParams({
     chainid: String(chainId),
     module: "account",
@@ -46,16 +47,17 @@ export async function GET(req: NextRequest) {
   // Try Etherscan V2
   type TokenTx = { to?: string; tokenID?: string; tokenId?: string };
   let txs: TokenTx[] = [];
-  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null;
   const toTokenTxArray = (arr: unknown): TokenTx[] =>
     Array.isArray(arr)
       ? arr
           .map((v) => (isRecord(v) ? (v as Record<string, unknown>) : null))
           .filter((v): v is Record<string, unknown> => !!v)
           .map((v) => ({
-            to: typeof v.to === 'string' ? v.to : undefined,
-            tokenID: typeof v.tokenID === 'string' ? v.tokenID : undefined,
-            tokenId: typeof v.tokenId === 'string' ? v.tokenId : undefined,
+            to: typeof v.to === "string" ? v.to : undefined,
+            tokenID: typeof v.tokenID === "string" ? v.tokenID : undefined,
+            tokenId: typeof v.tokenId === "string" ? v.tokenId : undefined,
           }))
       : [];
   try {
@@ -95,7 +97,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Collect tokenIds received by this wallet
-  const mine = txs.filter((t) => String(t?.to).toLowerCase() === String(address).toLowerCase());
+  const mine = txs.filter(
+    (t) => String(t?.to).toLowerCase() === String(address).toLowerCase()
+  );
   const seen = new Set<string>();
   const tokenIds: string[] = [];
   for (const t of mine) {
@@ -111,15 +115,20 @@ export async function GET(req: NextRequest) {
     : process.env.BASE_SEPOLIA_RPC_URL;
   const chain = isBaseMainnet ? base : baseSepolia;
   const fallbackRpc = chain.rpcUrls.default?.http?.[0];
-  const client = createPublicClient({ chain, transport: http(rpcUrl || fallbackRpc) });
+  const client = createPublicClient({
+    chain,
+    transport: http(rpcUrl || fallbackRpc),
+  });
 
-  const abi = [{
-    type: "function",
-    stateMutability: "view",
-    name: "tokenURI",
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    outputs: [{ name: "", type: "string" }],
-  }] as const;
+  const abi = [
+    {
+      type: "function",
+      stateMutability: "view",
+      name: "tokenURI",
+      inputs: [{ name: "tokenId", type: "uint256" }],
+      outputs: [{ name: "", type: "string" }],
+    },
+  ] as const;
 
   const items: string[] = [];
   for (const id of tokenIds) {
@@ -134,9 +143,9 @@ export async function GET(req: NextRequest) {
       const metaRes = await fetch(metaUrl, { next: { revalidate: 60 } });
       const meta = (await metaRes.json().catch(() => null)) as unknown;
       const getImage = (m: unknown): string => {
-        if (m && typeof m === 'object') {
+        if (m && typeof m === "object") {
           const r = m as Record<string, unknown>;
-          if (typeof r.image === 'string') return r.image;
+          if (typeof r.image === "string") return r.image;
         }
         return "";
       };
