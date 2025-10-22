@@ -38,7 +38,9 @@ export default function AccountPage() {
       type UnknownItem = { image?: unknown; time?: unknown };
       const itemsParsed: WalletItem[] = Array.isArray(arr)
         ? (arr as unknown[])
-            .map((v) => (typeof v === "object" && v !== null ? (v as UnknownItem) : null))
+            .map((v) =>
+              typeof v === "object" && v !== null ? (v as UnknownItem) : null
+            )
             .filter((v): v is UnknownItem => !!v && typeof v.image === "string")
             .map((v) => ({
               image: String(v.image),
@@ -47,7 +49,7 @@ export default function AccountPage() {
         : [];
       setItems(itemsParsed);
     } catch {
-  setItems([]);
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -89,13 +91,15 @@ export default function AccountPage() {
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Top section: content-sized for mobile to avoid overlap */}
-  <div className="shrink-0">
+      <div className="shrink-0">
         <AccountInfo
           loading={!isConnected || isConnecting}
           avatarUrl={avatarUrl}
           wallet={address ?? null}
           title={"sunset catcher"}
-          postTimes={items.map((it) => (typeof it.time === "number" ? it.time : undefined)).filter((n): n is number => typeof n === "number")}
+          postTimes={items
+            .map((it) => (typeof it.time === "number" ? it.time : undefined))
+            .filter((n): n is number => typeof n === "number")}
         />
         <div className="px-4">
           <button

@@ -124,7 +124,13 @@ function YearlySunsetStats({
     (postTimes || []).forEach((ts) => {
       const d = new Date(ts * 1000);
       // Normalize to UTC date key for consistency
-      s.add(toKey(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))));
+      s.add(
+        toKey(
+          new Date(
+            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+          )
+        )
+      );
     });
     return s;
   }, [postTimes]);
@@ -132,8 +138,11 @@ function YearlySunsetStats({
   const now = new Date();
   const year = now.getUTCFullYear();
   const jan1 = new Date(Date.UTC(year, 0, 1));
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const daysElapsed = Math.floor((todayUTC.getTime() - jan1.getTime()) / 86_400_000) + 1; // inclusive
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const daysElapsed =
+    Math.floor((todayUTC.getTime() - jan1.getTime()) / 86_400_000) + 1; // inclusive
   // const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
 
   // Count unique days with posts since Jan 1 to today
@@ -143,19 +152,27 @@ function YearlySunsetStats({
     if (postSet.has(toKey(d))) count++;
   }
 
-  // Build GitHub-like weekly grid for last 90 rolling days
-  const DAYS_WINDOW = 90;
-  const startWindow = new Date(todayUTC.getTime() - (DAYS_WINDOW - 1) * 86_400_000);
-  // Align to previous Sunday
+  // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31)
+  const startWindow = jan1;
+  const dec31 = new Date(Date.UTC(year, 11, 31));
+  // Align grid to previous Sunday and next Saturday around the full year
   const startWeekday = startWindow.getUTCDay();
   const gridStart = new Date(startWindow.getTime() - startWeekday * 86_400_000);
-  // Extend to end of current week (Saturday) to allow future days (white)
-  const endWeekday = todayUTC.getUTCDay();
-  const gridEnd = new Date(todayUTC.getTime() + (6 - endWeekday) * 86_400_000);
-  const totalDays = Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
+  const endWeekdayDec31 = dec31.getUTCDay();
+  const gridEnd = new Date(
+    dec31.getTime() + (6 - endWeekdayDec31) * 86_400_000
+  );
+  const totalDays =
+    Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
   const weeks = Math.ceil(totalDays / 7);
 
-  type Cell = { date: Date; key: string; inWindow: boolean; isFuture: boolean; hasPost: boolean };
+  type Cell = {
+    date: Date;
+    key: string;
+    inWindow: boolean;
+    isFuture: boolean;
+    hasPost: boolean;
+  };
   const weeksArr: Array<Array<Cell>> = [];
   for (let w = 0; w < weeks; w++) {
     const col: Array<Cell> = [];
@@ -163,8 +180,8 @@ function YearlySunsetStats({
       const idx = w * 7 + d;
       const date = new Date(gridStart.getTime() + idx * 86_400_000);
       const key = toKey(date);
-      const inWindow = date >= startWindow && date <= todayUTC; // window is past 90 days including today
-      const isFuture = date > todayUTC;
+      const inWindow = date >= startWindow && date <= dec31; // entire year range
+      const isFuture = date > todayUTC && date <= dec31;
       const hasPost = postSet.has(key);
       col.push({ date, key, inWindow, isFuture, hasPost });
     }
@@ -172,7 +189,11 @@ function YearlySunsetStats({
   }
 
   // Group consecutive weeks into month chunks
-  type MonthChunk = { label: string; weekStartIndex: number; weekEndIndex: number };
+  type MonthChunk = {
+    label: string;
+    weekStartIndex: number;
+    weekEndIndex: number;
+  };
   const monthChunks: MonthChunk[] = [];
   const getWeekMonth = (w: number) => {
     // Use mid-week day (Wednesday) to determine month for this week
@@ -203,6 +224,30 @@ function YearlySunsetStats({
     weekEndIndex: weeks - 1,
   });
 
+  // Scroll container ref to position today's cell on mount
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const todayEl = container.querySelector(
+      '[data-today="true"]'
+    ) as HTMLElement | null;
+    if (!todayEl) return;
+    // Position today's cell around 3/4 of the visible width (slightly to the right)
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = todayEl.getBoundingClientRect();
+    const targetCenter = targetRect.left + targetRect.width / 2;
+    const desiredX = containerRect.left + containerRect.width * 0.75;
+    const delta = targetCenter - desiredX;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    const next = Math.min(
+      Math.max(container.scrollLeft + delta, 0),
+      Math.max(maxScroll, 0),
+    );
+    container.scrollLeft = next;
+  }, []);
+
   return (
     <div className="mt-4">
       {/* Summary line */}
@@ -211,13 +256,17 @@ function YearlySunsetStats({
           <Skeleton className="h-4 w-40" />
         ) : (
           <span>
-            Sunsets this year: <span className="font-semibold">{count}</span> / {daysElapsed}
+            Sunsets this year: <span className="font-semibold">{count}</span> /{" "}
+            {daysElapsed}
           </span>
         )}
       </div>
 
       {/* Contribution-like grid */}
-      <div className="mt-3 overflow-x-auto">
+      <div
+        ref={scrollRef}
+        className="mt-3 overflow-x-auto px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <div className="w-full flex justify-center">
           <div className="flex items-start">
             {monthChunks.map((chunk, idx) => (
@@ -230,30 +279,47 @@ function YearlySunsetStats({
                 </div>
                 {/* This month's weeks */}
                 <div className="inline-grid auto-cols-max grid-flow-col gap-1">
-                  {weeksArr.slice(chunk.weekStartIndex, chunk.weekEndIndex + 1).map((col, i) => (
-                    <div key={`w-${chunk.weekStartIndex + i}`} className="grid grid-rows-7 gap-1">
-                      {col.map((cell) => {
-                        const colorClass = cell.isFuture
-                          ? "bg-white"
-                          : cell.inWindow
-                          ? cell.hasPost
-                            ? "bg-amber-400"
-                            : "bg-[#1a1a1a]" // graphite black
-                          : "bg-transparent";
-                        return (
-                          <div
-                            key={cell.key}
-                            className={[
-                              "size-3 md:size-3.5 rounded-full border border-border",
-                              colorClass,
-                            ].join(" ")}
-                            aria-label={`${cell.date.toDateString()} ${cell.hasPost ? "Posted" : cell.isFuture ? "Future" : "No post"}`}
-                            title={cell.date.toDateString()}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
+                  {weeksArr
+                    .slice(chunk.weekStartIndex, chunk.weekEndIndex + 1)
+                    .map((col, i) => (
+                      <div
+                        key={`w-${chunk.weekStartIndex + i}`}
+                        className="grid grid-rows-7 gap-1"
+                      >
+                        {col.map((cell) => {
+                          const colorClass = cell.isFuture
+                            ? "bg-white"
+                            : cell.inWindow
+                            ? cell.hasPost
+                              ? "bg-amber-400"
+                              : "bg-[#1a1a1a]" // graphite black
+                            : "bg-transparent";
+                          return (
+                            <div
+                              key={cell.key}
+                              className={[
+                                "size-3 md:size-3.5 rounded-full border border-border",
+                                colorClass,
+                              ].join(" ")}
+                              data-key={cell.key}
+                              data-today={
+                                cell.key === toKey(todayUTC)
+                                  ? "true"
+                                  : undefined
+                              }
+                              aria-label={`${cell.date.toDateString()} ${
+                                cell.hasPost
+                                  ? "Posted"
+                                  : cell.isFuture
+                                  ? "Future"
+                                  : "No post"
+                              }`}
+                              title={cell.date.toDateString()}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
                 </div>
               </div>
             ))}

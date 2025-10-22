@@ -45,7 +45,12 @@ export async function GET(req: NextRequest) {
   if (apiKey) v2Params.set("apikey", apiKey);
 
   // Try Etherscan V2
-  type TokenTx = { to?: string; tokenID?: string; tokenId?: string; timeStamp?: string };
+  type TokenTx = {
+    to?: string;
+    tokenID?: string;
+    tokenId?: string;
+    timeStamp?: string;
+  };
   let txs: TokenTx[] = [];
   const isRecord = (v: unknown): v is Record<string, unknown> =>
     typeof v === "object" && v !== null;
@@ -58,7 +63,8 @@ export async function GET(req: NextRequest) {
             to: typeof v.to === "string" ? v.to : undefined,
             tokenID: typeof v.tokenID === "string" ? v.tokenID : undefined,
             tokenId: typeof v.tokenId === "string" ? v.tokenId : undefined,
-            timeStamp: typeof v.timeStamp === "string" ? v.timeStamp : undefined,
+            timeStamp:
+              typeof v.timeStamp === "string" ? v.timeStamp : undefined,
           }))
       : [];
   try {

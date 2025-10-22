@@ -172,7 +172,9 @@ export default function Feed() {
                   aria-label="Like"
                   disabled
                 >
-                  <span aria-hidden="true" className="text-2xl leading-none">♡</span>
+                  <span aria-hidden="true" className="text-2xl leading-none">
+                    ♡
+                  </span>
                   <span className="text-base">Like</span>
                 </button>
               </div>
