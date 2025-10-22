@@ -39,6 +39,31 @@ export default function AccountInfo({
     } catch {}
   };
 
+  // Compute yearly level (unique days with posts in the current year)
+  const yearlyLevel = React.useMemo(() => {
+    const toKeyUTC = (d: Date) => d.toISOString().slice(0, 10);
+    const set = new Set<string>();
+    (postTimes || []).forEach((ts) => {
+      const d = new Date(ts * 1000);
+      set.add(
+        toKeyUTC(
+          new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())),
+        ),
+      );
+    });
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const jan1 = new Date(Date.UTC(year, 0, 1));
+    const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+    const yearDays = isLeap ? 366 : 365;
+    let count = 0;
+    for (let i = 0; i < yearDays; i++) {
+      const d = new Date(jan1.getTime() + i * 86_400_000);
+      if (set.has(toKeyUTC(d))) count++;
+    }
+    return count;
+  }, [postTimes]);
+
   return (
     <div className="w-full h-full p-4">
       <div className="flex items-center gap-4">
@@ -78,8 +103,9 @@ export default function AccountInfo({
           {loading ? (
             <Skeleton className="h-3 w-1/2" />
           ) : (
-            <div className="text-sm opacity-80">
-              {title || "sunset catcher"}
+            <div className="text-sm opacity-80 flex items-center gap-2">
+              <span className="truncate">{title || "sunset catcher"}</span>
+              <span className="whitespace-nowrap">LVL <span className="font-semibold">{yearlyLevel}</span></span>
             </div>
           )}
         </div>
@@ -141,15 +167,13 @@ function YearlySunsetStats({
   const todayUTC = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
   );
-  const daysElapsed =
-    Math.floor((todayUTC.getTime() - jan1.getTime()) / 86_400_000) + 1; // inclusive
-  // const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
-
-  // Count unique days with posts since Jan 1 to today
-  let count = 0;
-  for (let i = 0; i < daysElapsed; i++) {
+  const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+  const yearDays = isLeap ? 366 : 365;
+  // Count unique posting days for the entire calendar year
+  let countYear = 0;
+  for (let i = 0; i < yearDays; i++) {
     const d = new Date(jan1.getTime() + i * 86_400_000);
-    if (postSet.has(toKey(d))) count++;
+    if (postSet.has(toKey(d))) countYear++;
   }
 
   // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31)
@@ -195,6 +219,20 @@ function YearlySunsetStats({
     weekEndIndex: number;
   };
   const monthChunks: MonthChunk[] = [];
+  const MONTHS_SHORT = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ] as const;
   const getWeekMonth = (w: number) => {
     // Use mid-week day (Wednesday) to determine month for this week
     const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
@@ -202,7 +240,7 @@ function YearlySunsetStats({
   };
   const getWeekMonthLabel = (w: number) => {
     const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
-    return mid.toLocaleString(undefined, { month: "short" });
+    return MONTHS_SHORT[mid.getUTCMonth()];
   };
   let currentMonth = getWeekMonth(0);
   let startIdx = 0;
@@ -256,8 +294,7 @@ function YearlySunsetStats({
           <Skeleton className="h-4 w-40" />
         ) : (
           <span>
-            Sunsets this year: <span className="font-semibold">{count}</span> /{" "}
-            {daysElapsed}
+            <span className="font-semibold">{countYear}</span>/{yearDays} sunsets caught
           </span>
         )}
       </div>

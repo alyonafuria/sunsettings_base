@@ -28,6 +28,7 @@ export default function Feed() {
   const [hasMore, setHasMore] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [levels, setLevels] = React.useState<Record<string, number | undefined>>({});
 
   const loadPage = React.useCallback(async () => {
     if (loading || !hasMore) return;
@@ -79,6 +80,74 @@ export default function Feed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Compute and cache yearly level per author (unique posting days in current year)
+  const requestedAuthorsRef = React.useRef<Set<string>>(new Set());
+
+  // Reset cached levels and requested authors when chain changes
+  React.useEffect(() => {
+    setLevels({});
+    requestedAuthorsRef.current = new Set();
+  }, [chainId]);
+
+  React.useEffect(() => {
+    const distinctAuthors = Array.from(new Set(items.map((i) => i.author)));
+    const authorsToFetch = distinctAuthors.filter(
+      (a) => !requestedAuthorsRef.current.has(a)
+    );
+    if (authorsToFetch.length === 0) return;
+
+    const year = new Date().getUTCFullYear();
+    const jan1 = new Date(Date.UTC(year, 0, 1));
+    const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+    const yearDays = isLeap ? 366 : 365;
+    const toKey = (d: Date) => d.toISOString().slice(0, 10);
+
+    const fetchLevel = async (addr: string) => {
+      try {
+        // mark as in-flight to avoid duplicate requests
+        setLevels((prev) => (addr in prev ? prev : { ...prev, [addr]: undefined }));
+        const params = new URLSearchParams();
+        params.set("address", addr);
+        if (chainId) params.set("chainId", String(chainId));
+        const res = await fetch(`/api/wallet-nfts?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        const arr: unknown = data?.items;
+        type UnknownItem = { time?: unknown };
+        const times: number[] = Array.isArray(arr)
+          ? (arr as unknown[])
+              .map((v) => (typeof v === "object" && v !== null ? (v as UnknownItem) : null))
+              .map((v) => (v && typeof v.time === "number" ? v.time : undefined))
+              .filter((t): t is number => typeof t === "number")
+          : [];
+        const set = new Set<string>();
+        times.forEach((ts) => {
+          const d = new Date(ts * 1000);
+          const key = toKey(
+            new Date(
+              Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+            )
+          );
+          set.add(key);
+        });
+        let count = 0;
+        for (let i = 0; i < yearDays; i++) {
+          const d = new Date(jan1.getTime() + i * 86_400_000);
+          if (set.has(toKey(d))) count++;
+        }
+        setLevels((prev) => ({ ...prev, [addr]: count }));
+      } catch {
+        setLevels((prev) => ({ ...prev, [addr]: 0 }));
+      }
+    };
+
+    authorsToFetch.forEach((addr) => {
+      requestedAuthorsRef.current.add(addr);
+      fetchLevel(addr);
+    });
+  }, [items, chainId]);
+
   // infinite scroll via intersection observer
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
@@ -105,7 +174,7 @@ export default function Feed() {
         <ul className="flex flex-col">
           {items.map((it) => (
             <li
-              key={`${it.id}-${it.author}`}
+              key={`${it.id}-${it.author}-${it.time}`}
               className="border-b-2 border-black"
             >
               {/* Header with avatar placeholder + author */}
@@ -125,7 +194,9 @@ export default function Feed() {
                   />
                 </div>
                 <div className="flex-1 truncate text-base font-medium">
-                  {getRomanticNameForAddress(it.author)} · {mask(it.author)}
+              {getRomanticNameForAddress(it.author)} · {mask(it.author)}
+              {" "}
+              <span className="opacity-80">· LVL {levels[it.author] ?? "…"}</span>
                 </div>
                 <div className="opacity-50 text-lg leading-none select-none">
                   ⋯
