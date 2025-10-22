@@ -1,6 +1,6 @@
 // @noErrors: 2554
 import { http, cookieStorage, createConfig, createStorage, WagmiProvider } from 'wagmi';
-import { baseSepolia } from 'wagmi/chains';
+import { baseSepolia, base } from 'wagmi/chains';
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors';
 
 const projectID = process.env.NEXT_PUBLIC_PROJECT_ID;
@@ -8,7 +8,7 @@ const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
 
 export function getConfig() {
   return createConfig({
-    chains: [baseSepolia],
+    chains: [base],
     connectors: [
       coinbaseWallet({
         appName: 'Sunsettings',
@@ -27,7 +27,7 @@ export function getConfig() {
     }),
     ssr: true,
     transports: {
-      [baseSepolia.id]: http(),
+      [base.id]: http(),
     },
   });
 }

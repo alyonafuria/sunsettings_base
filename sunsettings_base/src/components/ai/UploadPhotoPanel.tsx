@@ -50,7 +50,7 @@ export default function UploadPhotoPanel({
   onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
   const { address: connectedAddress, chainId, isConnected } = useAccount();
-  const currentChainId = chainId ?? 84532;
+  const currentChainId = 8453;
   const { connectors, connectAsync, status: connectStatus } = useConnect()
   const connectCoinbase = async () => {
     try {

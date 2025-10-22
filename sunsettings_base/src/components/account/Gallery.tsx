@@ -11,9 +11,15 @@ export default function Gallery({ items }: { items: string[] }) {
 
   return (
     <div className="grid grid-cols-3 gap-0">
-      {items.map((id) => (
-        <div key={id} className="relative w-full pt-[100%]">
-          <div className="absolute inset-0 bg-secondary-background border-2 border-black" />
+      {items.map((url) => (
+        <div key={url} className="relative w-full pt-[100%]">
+          <img
+            src={url}
+            alt="sunsettings photo"
+            className="absolute inset-0 h-full w-full object-cover border-2 border-black"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
         </div>
       ))}
     </div>

@@ -12,29 +12,47 @@ export default function AccountPage() {
 
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const refetch = React.useCallback(async () => {
+    if (!isConnected || !address) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const chain = chainId ?? 8453;
+      const params = new URLSearchParams({ address, chainId: String(chain) });
+      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [isConnected, address, chainId]);
 
   React.useEffect(() => {
     let aborted = false;
-    const run = async () => {
-      if (!isConnected || !address) {
-        setItems([]);
-        return;
-      }
-      try {
-        const chain = chainId ?? 84532;
-        const params = new URLSearchParams({ address, chainId: String(chain) });
-        const res = await fetch(`/api/wallet-nfts?${params.toString()}`, { cache: "no-store" });
-        const data = await res.json();
-        if (!aborted) setItems(Array.isArray(data?.items) ? data.items : []);
-      } catch {
-        if (!aborted) setItems([]);
-      }
-    };
-    run();
+    refetch();
+    const onVis = () => { if (document.visibilityState === 'visible') refetch(); };
+    const onMinted = () => refetch();
+    const onPhotoUploaded = () => setTimeout(() => refetch(), 1500);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', onVis);
+      window.addEventListener('sunsettings:nftMinted', onMinted as any);
+      window.addEventListener('sunsettings:photoUploaded', onPhotoUploaded as any);
+    }
     return () => {
       aborted = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('visibilitychange', onVis);
+        window.removeEventListener('sunsettings:nftMinted', onMinted as any);
+        window.removeEventListener('sunsettings:photoUploaded', onPhotoUploaded as any);
+      }
     };
-  }, [isConnected, address, chainId]);
+  }, [refetch]);
 
   const connectCoinbase = async () => {
     try {
@@ -54,6 +72,16 @@ export default function AccountPage() {
           wallet={address ?? null}
           title={"sunset catcher"}
         />
+        <div className="px-4">
+          <button
+            type="button"
+            onClick={refetch}
+            className="mt-2 text-xs underline"
+            disabled={loading}
+          >
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Bottom gallery or connect CTA */}

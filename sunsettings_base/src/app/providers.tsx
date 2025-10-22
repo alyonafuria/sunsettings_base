@@ -13,9 +13,8 @@ const queryClient = new QueryClient();
 export function Providers(props: { children: ReactNode }) {
   const paymasterSepolia = process.env.NEXT_PUBLIC_PAYMASTER_AND_BUNDLER_SEPOLIA_ENDPOINT;
   const paymasterMainnet = process.env.NEXT_PUBLIC_PAYMASTER_AND_BUNDLER_ENDPOINT;
-  // Default to Sepolia during dev; switch chain + endpoint as you move to mainnet
-  const chain = baseSepolia;
-  const paymaster = chain.id === baseSepolia.id ? paymasterSepolia : paymasterMainnet;
+  const chain = base;
+  const paymaster = paymasterMainnet;
   return (
     <WagmiProvider config={getConfig()}>
     <QueryClientProvider client={queryClient}>
