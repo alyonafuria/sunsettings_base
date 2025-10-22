@@ -1,16 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect } from "wagmi";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
   const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
-  const { disconnect } = useDisconnect();
-
-  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+  // avatar is not yet used; pass null to AccountInfo
   const [items, setItems] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
 
@@ -34,22 +32,20 @@ export default function AccountPage() {
   }, [isConnected, address, chainId]);
 
   React.useEffect(() => {
-    let aborted = false;
     refetch();
     const onVis = () => { if (document.visibilityState === 'visible') refetch(); };
     const onMinted = () => refetch();
-    const onPhotoUploaded = () => setTimeout(() => refetch(), 1500);
+    const onPhotoUploaded = () => { setTimeout(() => refetch(), 1500); };
     if (typeof window !== 'undefined') {
       window.addEventListener('visibilitychange', onVis);
-      window.addEventListener('sunsettings:nftMinted', onMinted as any);
-      window.addEventListener('sunsettings:photoUploaded', onPhotoUploaded as any);
+      window.addEventListener('sunsettings:nftMinted', onMinted);
+      window.addEventListener('sunsettings:photoUploaded', onPhotoUploaded);
     }
     return () => {
-      aborted = true;
       if (typeof window !== 'undefined') {
         window.removeEventListener('visibilitychange', onVis);
-        window.removeEventListener('sunsettings:nftMinted', onMinted as any);
-        window.removeEventListener('sunsettings:photoUploaded', onPhotoUploaded as any);
+        window.removeEventListener('sunsettings:nftMinted', onMinted);
+        window.removeEventListener('sunsettings:photoUploaded', onPhotoUploaded);
       }
     };
   }, [refetch]);
@@ -68,7 +64,7 @@ export default function AccountPage() {
       <div className="h-[20vh]">
         <AccountInfo
           loading={!isConnected || isConnecting}
-          avatarUrl={avatarUrl}
+          avatarUrl={null}
           wallet={address ?? null}
           title={"sunset catcher"}
         />

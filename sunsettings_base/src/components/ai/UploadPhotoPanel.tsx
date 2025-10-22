@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useAccount, useConnect } from "wagmi"
+import type { Abi } from "viem"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import Image from "next/image"
@@ -49,7 +50,7 @@ export default function UploadPhotoPanel({
   coords?: { lat?: number; lon?: number }
   onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
-  const { address: connectedAddress, chainId, isConnected } = useAccount();
+  const { address: connectedAddress, isConnected } = useAccount();
   const currentChainId = 8453;
   const { connectors, connectAsync, status: connectStatus } = useConnect()
   const connectCoinbase = async () => {
@@ -478,7 +479,7 @@ export default function UploadPhotoPanel({
                         ],
                         outputs: [],
                       },
-                    ];
+                    ] as const satisfies Abi;
                     if (!isConnected) {
                       return (
                         <div className="space-y-2">
@@ -497,18 +498,23 @@ export default function UploadPhotoPanel({
                         </div>
                       );
                     }
-                    const contracts = [
+                    const contracts: {
+                      address: `0x${string}`
+                      abi: Abi
+                      functionName: typeof mintFn
+                      args: [string, string]
+                    }[] = [
                       {
                         address: contractAddress as `0x${string}`,
-                        abi: mintAbi as any,
+                        abi: mintAbi,
                         functionName: mintFn,
-                        args: [connectedAddress, `ipfs://${metaCid}`],
+                        args: [connectedAddress as string, `ipfs://${metaCid}`],
                       },
                     ];
                     return (
                       <Transaction
                         isSponsored
-                        calls={contracts as any}
+                        calls={contracts}
                         className="w-full"
                         chainId={currentChainId}
                       >
@@ -754,16 +760,10 @@ export default function UploadPhotoPanel({
               lon: photoCellCenter?.lon ?? null,
               locationLabel: photoLocationLabel ?? null,
               takenAtIso: takenAtIso ?? null,
-              previewUrl: previewUrl || null,
             }
           }))
         } catch {}
       }
-      // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
-      setPreviewUrl(null)
-      setFile(null)
-      setUserDecision(null)
-      setUserScore(null)
     } catch (e) {
       setError((e as Error)?.message || "Upload failed")
     } finally {

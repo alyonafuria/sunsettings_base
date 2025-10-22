@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, http, type Address, type Abi } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
 function ipfsToHttp(uri: string): string {
@@ -44,12 +44,13 @@ export async function GET(req: NextRequest) {
   if (apiKey) v2Params.set("apikey", apiKey);
 
   // Try Etherscan V2
-  let txs: any[] = [];
+  type ScanTx = { to?: string; tokenID?: string; tokenId?: string };
+  let txs: ScanTx[] = [];
   try {
     const v2Url = `https://api.etherscan.io/v2/api?${v2Params.toString()}`;
     const v2Res = await fetch(v2Url, { next: { revalidate: 10 } });
     const v2Data = await v2Res.json();
-    if (Array.isArray(v2Data?.result)) txs = v2Data.result;
+    if (Array.isArray(v2Data?.result)) txs = v2Data.result as ScanTx[];
   } catch {}
 
   // Fallback to Basescan if empty
@@ -71,16 +72,16 @@ export async function GET(req: NextRequest) {
       const url = `${apiBase}?${qs.toString()}`;
       const res = await fetch(url, { next: { revalidate: 10 } });
       const data = await res.json();
-      txs = Array.isArray(data?.result) ? data.result : [];
+      txs = Array.isArray(data?.result) ? (data.result as ScanTx[]) : [];
     } catch {}
   }
 
   // Collect tokenIds received by this wallet
-  const mine = txs.filter((t) => String(t?.to).toLowerCase() === String(address).toLowerCase());
+  const mine = txs.filter((t) => String(t.to || "").toLowerCase() === String(address).toLowerCase());
   const seen = new Set<string>();
   const tokenIds: string[] = [];
   for (const t of mine) {
-    const id = String(t?.tokenID ?? t?.tokenId ?? "");
+    const id = String((t.tokenID as unknown as string) ?? (t.tokenId as unknown as string) ?? "");
     if (!id || seen.has(id)) continue;
     seen.add(id);
     tokenIds.push(id);
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
     ? process.env.BASE_RPC_URL
     : process.env.BASE_SEPOLIA_RPC_URL;
   const chain = isBaseMainnet ? base : baseSepolia;
-  const fallbackRpc = (chain.rpcUrls as any).default?.http?.[0];
+  const fallbackRpc: string | undefined = chain.rpcUrls.default?.http?.[0];
   const client = createPublicClient({ chain, transport: http(rpcUrl || fallbackRpc) });
 
   const abi = [{
@@ -100,14 +101,14 @@ export async function GET(req: NextRequest) {
     name: "tokenURI",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [{ name: "", type: "string" }],
-  }] as const;
+  }] as const satisfies Abi;
 
   const items: string[] = [];
   for (const id of tokenIds) {
     try {
       const uri = await client.readContract({
         address: contractAddress as Address,
-        abi: abi as any,
+        abi,
         functionName: "tokenURI",
         args: [BigInt(id)],
       });
