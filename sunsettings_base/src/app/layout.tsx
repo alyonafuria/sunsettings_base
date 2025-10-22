@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menubar } from "@/components/ui/menubar";
 import "./globals.css";
 import { Providers } from "./providers";
+import FarcasterReady from "@/components/FarcasterReady";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -63,6 +64,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${suseMono.variable} antialiased h-screen overflow-hidden`}
       >
         <Providers>
+          <FarcasterReady />
           <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
             <div className="grid w-full grid-cols-3 items-center">
               <div className="px-3">
