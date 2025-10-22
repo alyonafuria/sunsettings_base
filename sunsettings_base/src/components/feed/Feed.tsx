@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
+import BoringAvatar from "boring-avatars";
 
 type FeedItem = {
   id: string;
@@ -108,7 +109,14 @@ export default function Feed() {
             >
               {/* Header with avatar placeholder + author */}
               <div className="flex items-center gap-2 px-3 py-2">
-                <div className="h-8 w-8 rounded-full bg-secondary-background border-2 border-black" />
+                <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-black">
+                  <BoringAvatar
+                    size={32}
+                    name={it.author}
+                    variant="bauhaus"
+                    colors={["#ffe3b3", "#ff9a52", "#ff5252", "#c91e5a", "#3d2922"]}
+                  />
+                </div>
                 <div className="flex-1 truncate text-sm font-medium">{mask(it.author)}</div>
                 <div className="opacity-50 text-lg leading-none select-none">⋯</div>
               </div>

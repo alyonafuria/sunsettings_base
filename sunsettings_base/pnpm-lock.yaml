@@ -35,6 +35,9 @@ dependencies:
   '@tanstack/react-query':
     specifier: ^5.90.2
     version: 5.90.5(react@19.1.0)
+  boring-avatars:
+    specifier: ^1.10.1
+    version: 1.11.2
   class-variance-authority:
     specifier: ^0.7.1
     version: 0.7.1
@@ -3993,6 +3996,10 @@ packages:
 
   /bn.js@5.2.2:
     resolution: {integrity: sha512-v2YAxEmKaBLahNwE1mjp4WON6huMNeuDvagFZW+ASCuA/ku0bXR9hSMw0XpiqMoA3+rmnyck/tPRSFQkoC9Cuw==}
+    dev: false
+
+  /boring-avatars@1.11.2:
+    resolution: {integrity: sha512-3+wkwPeObwS4R37FGXMYViqc4iTrIRj5yzfX9Qy4mnpZ26sX41dGMhsAgmKks1r/uufY1pl4vpgzMWHYfJRb2A==}
     dev: false
 
   /borsh@0.7.0:
