@@ -19,14 +19,15 @@ export default function AccountPage() {
   const [avatarUrl] = React.useState<string | null>(null);
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const refetchingRef = React.useRef(false);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    setLoading(true);
+    if (refetchingRef.current) return;
+    refetchingRef.current = true;
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
@@ -51,7 +52,7 @@ export default function AccountPage() {
     } catch {
       setItems([]);
     } finally {
-      setLoading(false);
+      refetchingRef.current = false;
     }
   }, [isConnected, address, chainId]);
 
@@ -101,16 +102,6 @@ export default function AccountPage() {
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}
         />
-        <div className="px-4">
-          <button
-            type="button"
-            onClick={refetch}
-            className="mt-2 text-xs underline"
-            disabled={loading}
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
       </div>
 
       {/* Bottom gallery or connect CTA */}

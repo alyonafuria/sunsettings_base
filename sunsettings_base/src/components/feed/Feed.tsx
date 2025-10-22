@@ -28,7 +28,13 @@ export default function Feed() {
   const [hasMore, setHasMore] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [levels, setLevels] = React.useState<Record<string, number | undefined>>({});
+  const [levels, setLevels] = React.useState<
+    Record<string, number | undefined>
+  >({});
+  const itemKey = React.useCallback(
+    (it: FeedItem) => `${it.id}-${it.author}-${it.time}` as const,
+    []
+  );
 
   const loadPage = React.useCallback(async () => {
     if (loading || !hasMore) return;
@@ -45,8 +51,13 @@ export default function Feed() {
       });
       const data = await res.json();
       const next: FeedItem[] = Array.isArray(data?.items) ? data.items : [];
-      setItems((prev) => [...prev, ...next]);
-      setHasMore(Boolean(data?.hasMore) && next.length > 0);
+      setItems((prev) => {
+        const seen = new Set(prev.map(itemKey));
+        const uniqueNext = next.filter((n) => !seen.has(itemKey(n)));
+        // Update hasMore based on whether we actually appended anything
+        setHasMore(Boolean(data?.hasMore) && uniqueNext.length > 0);
+        return [...prev, ...uniqueNext];
+      });
       setPage((p) => p + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load feed";
@@ -54,7 +65,7 @@ export default function Feed() {
     } finally {
       setLoading(false);
     }
-  }, [chainId, hasMore, loading, page]);
+  }, [chainId, hasMore, loading, page, itemKey]);
 
   React.useEffect(() => {
     // initial load
@@ -105,7 +116,9 @@ export default function Feed() {
     const fetchLevel = async (addr: string) => {
       try {
         // mark as in-flight to avoid duplicate requests
-        setLevels((prev) => (addr in prev ? prev : { ...prev, [addr]: undefined }));
+        setLevels((prev) =>
+          addr in prev ? prev : { ...prev, [addr]: undefined }
+        );
         const params = new URLSearchParams();
         params.set("address", addr);
         if (chainId) params.set("chainId", String(chainId));
@@ -117,8 +130,12 @@ export default function Feed() {
         type UnknownItem = { time?: unknown };
         const times: number[] = Array.isArray(arr)
           ? (arr as unknown[])
-              .map((v) => (typeof v === "object" && v !== null ? (v as UnknownItem) : null))
-              .map((v) => (v && typeof v.time === "number" ? v.time : undefined))
+              .map((v) =>
+                typeof v === "object" && v !== null ? (v as UnknownItem) : null
+              )
+              .map((v) =>
+                v && typeof v.time === "number" ? v.time : undefined
+              )
               .filter((t): t is number => typeof t === "number")
           : [];
         const set = new Set<string>();
@@ -161,22 +178,23 @@ export default function Feed() {
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [loadPage]);
+  }, [loadPage, items.length, hasMore]);
 
   return (
     <div className="h-full overflow-auto">
       <div className="mx-auto w-full max-w-md px-0">
-        {items.length === 0 && loading ? (
-          <div className="p-4 text-sm opacity-80">Loading feed…</div>
-        ) : null}
+        {/* Show loading only in the centered sentinel below */}
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
+
+        {items.length === 0 && loading ? (
+          <div className="h-[70vh] flex items-center justify-center">
+            <div className="text-base opacity-80">Loading photo feed…</div>
+          </div>
+        ) : null}
 
         <ul className="flex flex-col">
           {items.map((it) => (
-            <li
-              key={`${it.id}-${it.author}-${it.time}`}
-              className="border-b-2 border-black"
-            >
+            <li key={itemKey(it)} className="border-b-2 border-black">
               {/* Header with avatar placeholder + author */}
               <div className="flex items-center gap-3 px-3 py-2">
                 <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-border">
@@ -194,9 +212,10 @@ export default function Feed() {
                   />
                 </div>
                 <div className="flex-1 truncate text-base font-medium">
-              {getRomanticNameForAddress(it.author)} · {mask(it.author)}
-              {" "}
-              <span className="opacity-80">· LVL {levels[it.author] ?? "…"}</span>
+                  {getRomanticNameForAddress(it.author)} · {mask(it.author)}{" "}
+                  <span className="opacity-80">
+                    · LVL {levels[it.author] ?? "…"}
+                  </span>
                 </div>
                 <div className="opacity-50 text-lg leading-none select-none">
                   ⋯
@@ -253,12 +272,14 @@ export default function Feed() {
           ))}
         </ul>
 
-        <div
-          ref={sentinelRef}
-          className="h-12 flex items-center justify-center text-xs"
-        >
-          {hasMore ? (loading ? "Loading…" : "⬇︎ Load more") : "End of feed"}
-        </div>
+        {items.length === 0 && loading ? null : (
+          <div
+            ref={sentinelRef}
+            className="h-12 flex items-center justify-center text-xs"
+          >
+            {hasMore ? (loading ? "Loading…" : "⬇︎ Load more") : "End of feed"}
+          </div>
+        )}
       </div>
     </div>
   );

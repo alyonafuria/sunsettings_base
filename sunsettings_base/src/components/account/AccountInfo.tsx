@@ -47,8 +47,10 @@ export default function AccountInfo({
       const d = new Date(ts * 1000);
       set.add(
         toKeyUTC(
-          new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())),
-        ),
+          new Date(
+            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+          )
+        )
       );
     });
     const now = new Date();
@@ -105,7 +107,9 @@ export default function AccountInfo({
           ) : (
             <div className="text-sm opacity-80 flex items-center gap-2">
               <span className="truncate">{title || "sunset catcher"}</span>
-              <span className="whitespace-nowrap">LVL <span className="font-semibold">{yearlyLevel}</span></span>
+              <span className="whitespace-nowrap">
+                LVL <span className="font-semibold">{yearlyLevel}</span>
+              </span>
             </div>
           )}
         </div>
@@ -281,7 +285,7 @@ function YearlySunsetStats({
     const maxScroll = container.scrollWidth - container.clientWidth;
     const next = Math.min(
       Math.max(container.scrollLeft + delta, 0),
-      Math.max(maxScroll, 0),
+      Math.max(maxScroll, 0)
     );
     container.scrollLeft = next;
   }, []);
@@ -294,7 +298,8 @@ function YearlySunsetStats({
           <Skeleton className="h-4 w-40" />
         ) : (
           <span>
-            <span className="font-semibold">{countYear}</span>/{yearDays} sunsets caught
+            <span className="font-semibold">{countYear}</span>/{yearDays}{" "}
+            sunsets caught
           </span>
         )}
       </div>
