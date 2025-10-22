@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import Link from "next/link";
 import { Menubar } from "@/components/ui/menubar";
 import "./globals.css";
-import { Providers } from './providers';
+import { Providers } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,7 +65,17 @@ export default function RootLayout({
         <Providers>
           <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
             <div className="flex w-full items-center">
-              <div className="flex-1" />
+              <div className="flex-1 hidden md:flex items-center gap-4 px-3">
+                <Link href="/" className="text-sm font-medium">
+                  Home
+                </Link>
+                <Link href="/feed" className="text-sm font-medium">
+                  Feed
+                </Link>
+                <Link href="/account" className="text-sm font-medium">
+                  Account
+                </Link>
+              </div>
               <Link
                 href="/"
                 className={`flex-1 text-center ${sunsettingsHeadline.className} text-white text-5xl md:text-4xl leading-none tracking-tight`}
@@ -81,10 +91,19 @@ export default function RootLayout({
           <Menubar className="fixed bottom-0 left-0 right-0 h-16 px-4 z-20 md:hidden border-t-2 border-black">
             <nav className="flex h-full w-full">
               <div className="flex-1 h-full flex items-center justify-center">
-                <Link href="/" className="text-sm font-medium">Home</Link>
+                <Link href="/" className="text-sm font-medium">
+                  Home
+                </Link>
               </div>
               <div className="flex-1 h-full flex items-center justify-center border-l-2 border-black">
-                <Link href="/account" className="text-sm font-medium">Account</Link>
+                <Link href="/feed" className="text-sm font-medium">
+                  Feed
+                </Link>
+              </div>
+              <div className="flex-1 h-full flex items-center justify-center border-l-2 border-black">
+                <Link href="/account" className="text-sm font-medium">
+                  Account
+                </Link>
               </div>
             </nav>
           </Menubar>

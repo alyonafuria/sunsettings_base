@@ -8,7 +8,10 @@ import Gallery from "@/components/account/Gallery";
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
   const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
-  // avatar is not yet used; pass null to AccountInfo
+  // const { disconnect } = useDisconnect(); // not used on this page
+
+  // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
+  const [avatarUrl] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
 
@@ -33,9 +36,9 @@ export default function AccountPage() {
 
   React.useEffect(() => {
     refetch();
-    const onVis = () => { if (document.visibilityState === 'visible') refetch(); };
-    const onMinted = () => refetch();
-    const onPhotoUploaded = () => { setTimeout(() => refetch(), 1500); };
+    const onVis: EventListener = () => { if (document.visibilityState === 'visible') refetch(); };
+    const onMinted: EventListener = () => refetch();
+    const onPhotoUploaded: EventListener = () => setTimeout(() => refetch(), 1500);
     if (typeof window !== 'undefined') {
       window.addEventListener('visibilitychange', onVis);
       window.addEventListener('sunsettings:nftMinted', onMinted);

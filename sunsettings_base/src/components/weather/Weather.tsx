@@ -2,70 +2,7 @@
 
 import * as React from "react"
 
-type BrightSkyRecord = {
-  timestamp?: string
-  cloud_cover?: number
-  relative_humidity?: number
-  temperature?: number
-  precipitation_probability?: number
-  precipitation?: number
-}
-
-async function fetchHourlyWeather(lat: number, lon: number): Promise<string> {
-  try {
-    const today = new Date()
-    const dateParam = today.toISOString().slice(0, 10)
-    const url = `https://api.brightsky.dev/weather?date=${dateParam}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Weather HTTP ${res.status}`)
-    const json = await res.json()
-    const records: BrightSkyRecord[] = (json.weather as BrightSkyRecord[]) || []
-    if (!records.length) return "No weather data."
-
-    const sameDay = records.filter((r) => r.timestamp?.startsWith(dateParam))
-    const sample = sameDay.length ? sameDay : records
-
-    const sunsetWindow = sample.filter((r) => {
-      const hour = parseInt(r.timestamp?.substring(11, 13) || "0", 10)
-      return hour >= 15 && hour <= 22
-    })
-    const targetSet = sunsetWindow.length ? sunsetWindow : sample.slice(-6)
-
-    const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
-
-    const cloudsArr = targetSet
-      .map((r) => (typeof r.cloud_cover === "number" ? r.cloud_cover : null))
-      .filter((n) => n !== null) as number[]
-    const humidArr = targetSet
-      .map((r) => (typeof r.relative_humidity === "number" ? r.relative_humidity : null))
-      .filter((n) => n !== null) as number[]
-    const tempArr = targetSet
-      .map((r) => (typeof r.temperature === "number" ? r.temperature : null))
-      .filter((n) => n !== null) as number[]
-    const precipProbArr = targetSet
-      .map((r) => (typeof r.precipitation_probability === "number" ? r.precipitation_probability : null))
-      .filter((n) => n !== null) as number[]
-    const precipArr = targetSet.map((r) => (typeof r.precipitation === "number" ? r.precipitation : 0))
-
-    const cloudAvg = avg(cloudsArr)
-    const humidAvg = avg(humidArr)
-    const tempAvg = avg(tempArr)
-    const precipMax = precipProbArr.length ? Math.max(...precipProbArr) : null
-    const precipSum = precipArr.reduce((a, b) => a + (b || 0), 0)
-
-    const parts: string[] = []
-    if (cloudAvg !== null) parts.push(`avg_cloud:${cloudAvg.toFixed(0)}%`)
-    if (humidAvg !== null) parts.push(`avg_humidity:${humidAvg.toFixed(0)}%`)
-    if (tempAvg !== null) parts.push(`avg_temp:${tempAvg.toFixed(1)}C`)
-    if (precipMax !== null) parts.push(`precip_prob_max:${precipMax}%`)
-    if (precipSum > 0) parts.push(`precip_total:${precipSum.toFixed(1)}mm`)
-    parts.push(`hours_analyzed:${targetSet.length}`)
-
-    return parts.join("; ")
-  } catch {
-    return "Weather fetch failed"
-  }
-}
+// Removed unused BrightSky direct fetch helper to reduce bundle and lint warnings
 
 export default function Weather({ lat, lon }: { lat?: number | null; lon?: number | null }) {
   const [summary, setSummary] = React.useState<string>("")

@@ -498,12 +498,13 @@ export default function UploadPhotoPanel({
                         </div>
                       );
                     }
-                    const contracts: {
+                    type ContractCall = {
                       address: `0x${string}`
                       abi: Abi
-                      functionName: typeof mintFn
-                      args: [string, string]
-                    }[] = [
+                      functionName: string
+                      args: [string | undefined, string]
+                    }
+                    const contracts: ContractCall[] = [
                       {
                         address: contractAddress as `0x${string}`,
                         abi: mintAbi,

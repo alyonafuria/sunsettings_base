@@ -57,6 +57,13 @@ function fromKeyvalues(row: PinListRow): PhotoMetadata | null {
   }
 }
 
+type MetaProperties = {
+  photoCellCenterLat?: number
+  photoCellCenterLon?: number
+  photoLocationLabel?: string
+  photoCreatedAt?: string
+}
+
 type MetaJson = {
   // legacy fields
   photoCellCenterLat?: number
@@ -74,8 +81,8 @@ type MetaJson = {
   userSunsetScoreLabel?: string
   // erc-721 fields
   image?: string
-  attributes?: Array<{ trait_type?: string; value?: unknown }>
-  properties?: Record<string, unknown>
+  attributes?: Array<{ trait_type?: string; value?: number | string | null }>
+  properties?: MetaProperties
 }
 
 type MetaProps = {
@@ -129,12 +136,12 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
     ? data.photoCellCenterLat
     : typeof data.lat === "number"
     ? data.lat
-    : (typeof props?.photoCellCenterLat === "number" ? props.photoCellCenterLat : null)
+  : (typeof data.properties?.photoCellCenterLat === "number" ? data.properties.photoCellCenterLat : null)
   const lon = typeof data.photoCellCenterLon === "number"
     ? data.photoCellCenterLon
     : typeof data.lon === "number"
     ? data.lon
-    : (typeof props?.photoCellCenterLon === "number" ? props.photoCellCenterLon : null)
+  : (typeof data.properties?.photoCellCenterLon === "number" ? data.properties.photoCellCenterLon : null)
   // photo CID from legacy photoCid/photo.cid or from image ipfs://
   let photoCid = typeof data.photoCid === "string"
     ? data.photoCid
@@ -154,13 +161,13 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
     lon,
     locationLabel: typeof data.photoLocationLabel === "string"
       ? data.photoLocationLabel
-      : (typeof props?.photoLocationLabel === "string" ? props.photoLocationLabel : null),
+  : (typeof data.properties?.photoLocationLabel === "string" ? data.properties.photoLocationLabel : null),
     takenAtIso:
       typeof data.photoCreatedAt === "string"
         ? data.photoCreatedAt
         : typeof data.takenAt === "string"
         ? data.takenAt
-        : (typeof props?.photoCreatedAt === "string" ? props.photoCreatedAt : null),
+  : (typeof data.properties?.photoCreatedAt === "string" ? data.properties.photoCreatedAt : null),
     scorePercent: typeof data.sunsetScorePercent === "number"
       ? data.sunsetScorePercent
       : (Array.isArray(data.attributes) ? (data.attributes.find(a => a.trait_type === "sunsettings_score")?.value as number | undefined) ?? null : null),
