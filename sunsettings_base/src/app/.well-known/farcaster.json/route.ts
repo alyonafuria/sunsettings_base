@@ -12,17 +12,17 @@ return Response.json({
     "signature": ""
   },
   "baseBuilder": {
-    "allowedAddresses": ["0xB5592f774757Dc60c1601895e8E339C50916A563"]
+    "allowedAddresses": ["0xC6a8Ba6F67C52f2F489069aa44570938334C11F6"]
   },
   "miniapp": {
     "version": "1",
     "name": "sunsettings",
     "homeUrl": "https://catch.sunsettings.app",
     "iconUrl": "https://catch.sunsettings.app/icon.png",
-    "splashImageUrl": "https://catch.sunsettings.app/name.png",
+    "splashImageUrl": "https://catch.sunsettings.app/icon.png",
     "splashBackgroundColor": "#009bfa",
     "webhookUrl": "https://catch.sunsettings.app/api/webhook",
-    "subtitle": "we provide access to basic miracles",
+    "subtitle": "basic miracles",
     "description": "get prediction of sunset beauty, share your photos with the world and track sunset catching progress",
     "screenshotUrls": [
       "https://catch.sunsettings.app/screenshot1.png",
@@ -30,9 +30,9 @@ return Response.json({
       "https://catch.sunsettings.app/screenshot3.jpg"
     ],
     "primaryCategory": "social",
-    "tags": ["sunset", "miniapp", "baseapp", "photos", "sunsets", "nature", "beauty", "miracles", "social", "sunrise"],
+    "tags": ["sunset", "photos", "nature", "beauty", "social"],
     "heroImageUrl": "https://catch.sunsettings.app/icon.png",
-    "tagline": "we provide access to basic miracles",
+    "tagline": "basic miracles",
     "ogTitle": "sunsettings",
     "ogDescription": "get prediction of sunset beauty, share your photos with the world and track sunset catching progress",
     "ogImageUrl": "https://catch.sunsettings.app/icon.png",
