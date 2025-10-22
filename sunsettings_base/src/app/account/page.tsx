@@ -7,47 +7,76 @@ import Gallery from "@/components/account/Gallery";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
-  const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
+  const {
+    connectors,
+    connectAsync,
+    status: connectStatus,
+    error: connectError,
+  } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
-  const [items, setItems] = React.useState<string[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [avatarUrl] = React.useState<string | null>(null);
+  type WalletItem = { image: string; time?: number };
+  const [items, setItems] = React.useState<WalletItem[]>([]);
+  const refetchingRef = React.useRef(false);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    setLoading(true);
+    if (refetchingRef.current) return;
+    refetchingRef.current = true;
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
-      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
+      const arr: unknown = data?.items;
+      type UnknownItem = { image?: unknown; time?: unknown };
+      const itemsParsed: WalletItem[] = Array.isArray(arr)
+        ? (arr as unknown[])
+            .map((v) =>
+              typeof v === "object" && v !== null ? (v as UnknownItem) : null
+            )
+            .filter((v): v is UnknownItem => !!v && typeof v.image === "string")
+            .map((v) => ({
+              image: String(v.image),
+              time: typeof v.time === "number" ? v.time : undefined,
+            }))
+        : [];
+      setItems(itemsParsed);
     } catch {
       setItems([]);
     } finally {
-      setLoading(false);
+      refetchingRef.current = false;
     }
   }, [isConnected, address, chainId]);
 
   React.useEffect(() => {
     refetch();
-    const onVis: EventListener = () => { if (document.visibilityState === 'visible') refetch(); };
+    const onVis: EventListener = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
     const onMinted: EventListener = () => refetch();
-    const onPhotoUploaded: EventListener = () => setTimeout(() => refetch(), 1500);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('visibilitychange', onVis);
-      window.addEventListener('sunsettings:nftMinted', onMinted);
-      window.addEventListener('sunsettings:photoUploaded', onPhotoUploaded);
+    const onPhotoUploaded: EventListener = () =>
+      setTimeout(() => refetch(), 1500);
+    if (typeof window !== "undefined") {
+      window.addEventListener("visibilitychange", onVis);
+      window.addEventListener("sunsettings:nftMinted", onMinted);
+      window.addEventListener("sunsettings:photoUploaded", onPhotoUploaded);
     }
     return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('visibilitychange', onVis);
-        window.removeEventListener('sunsettings:nftMinted', onMinted);
-        window.removeEventListener('sunsettings:photoUploaded', onPhotoUploaded);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("visibilitychange", onVis);
+        window.removeEventListener("sunsettings:nftMinted", onMinted);
+        window.removeEventListener(
+          "sunsettings:photoUploaded",
+          onPhotoUploaded
+        );
       }
     };
   }, [refetch]);
@@ -61,45 +90,42 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="w-full min-h-screen flex flex-col">
-      {/* Top section: ~20% viewport height */}
-      <div className="h-[20vh]">
+    <div className="w-full h-full overflow-auto flex flex-col">
+      {/* Top section: content-sized for mobile to avoid overlap */}
+      <div className="shrink-0">
         <AccountInfo
           loading={!isConnected || isConnecting}
           avatarUrl={null}
           wallet={address ?? null}
           title={"sunset catcher"}
+          postTimes={items
+            .map((it) => (typeof it.time === "number" ? it.time : undefined))
+            .filter((n): n is number => typeof n === "number")}
         />
-        <div className="px-4">
-          <button
-            type="button"
-            onClick={refetch}
-            className="mt-2 text-xs underline"
-            disabled={loading}
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
       </div>
 
       {/* Bottom gallery or connect CTA */}
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         {isConnected ? (
-          <Gallery items={items} />
+          <Gallery items={items.map((it) => it.image)} />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
-              <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
+              <div className="mb-2 text-sm">
+                Sign up / Log in to catch sunsets
+              </div>
               <button
                 type="button"
                 onClick={connectCoinbase}
                 className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
-                disabled={connectStatus === 'pending'}
+                disabled={connectStatus === "pending"}
               >
-                {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
+                {connectStatus === "pending" ? "Connecting…" : "Connect wallet"}
               </button>
               {connectError ? (
-                <div className="mt-2 text-xs text-red-600">{String(connectError.message || 'Connection failed')}</div>
+                <div className="mt-2 text-xs text-red-600">
+                  {String(connectError.message || "Connection failed")}
+                </div>
               ) : null}
             </div>
           </div>

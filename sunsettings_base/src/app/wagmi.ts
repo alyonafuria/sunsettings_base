@@ -1,7 +1,7 @@
 // @noErrors: 2554
-import { http, cookieStorage, createConfig, createStorage } from 'wagmi';
-import { base } from 'wagmi/chains';
-import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors';
+import { http, cookieStorage, createConfig, createStorage } from "wagmi";
+import { base } from "wagmi/chains";
+import { coinbaseWallet, injected, metaMask } from "wagmi/connectors";
 
 // const projectID = process.env.NEXT_PUBLIC_PROJECT_ID; // unused
 // const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL; // unused
@@ -11,16 +11,16 @@ export function getConfig() {
     chains: [base],
     connectors: [
       coinbaseWallet({
-        appName: 'Sunsettings',
-        preference: 'smartWalletOnly',
-        version: '4',
+        appName: "Sunsettings",
+        preference: "smartWalletOnly",
+        version: "4",
       }),
       metaMask({
         dappMetadata: {
-          name: 'Sunsettings',
+          name: "Sunsettings",
         },
       }),
-      injected()
+      injected(),
     ],
     storage: createStorage({
       storage: cookieStorage,
@@ -32,7 +32,7 @@ export function getConfig() {
   });
 }
 
-declare module 'wagmi' {
+declare module "wagmi" {
   interface Register {
     config: ReturnType<typeof getConfig>;
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,13 @@ export default function AccountInfo({
   avatarUrl,
   wallet,
   title,
+  postTimes,
 }: {
   loading: boolean;
   avatarUrl?: string | null;
   wallet?: string | null;
   title?: string | null;
+  postTimes?: number[]; // unix seconds of posts (NFT mints)
 }) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -35,6 +38,33 @@ export default function AccountInfo({
       await connectAsync({ connector: coinbase ?? connectors[0] });
     } catch {}
   };
+
+  // Compute yearly level (unique days with posts in the current year)
+  const yearlyLevel = React.useMemo(() => {
+    const toKeyUTC = (d: Date) => d.toISOString().slice(0, 10);
+    const set = new Set<string>();
+    (postTimes || []).forEach((ts) => {
+      const d = new Date(ts * 1000);
+      set.add(
+        toKeyUTC(
+          new Date(
+            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+          )
+        )
+      );
+    });
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const jan1 = new Date(Date.UTC(year, 0, 1));
+    const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+    const yearDays = isLeap ? 366 : 365;
+    let count = 0;
+    for (let i = 0; i < yearDays; i++) {
+      const d = new Date(jan1.getTime() + i * 86_400_000);
+      if (set.has(toKeyUTC(d))) count++;
+    }
+    return count;
+  }, [postTimes]);
 
   return (
     <div className="w-full h-full p-4">
@@ -75,8 +105,11 @@ export default function AccountInfo({
           {loading ? (
             <Skeleton className="h-3 w-1/2" />
           ) : (
-            <div className="text-sm opacity-80">
-              {title || "sunset catcher"}
+            <div className="text-sm opacity-80 flex items-center gap-2">
+              <span className="truncate">{title || "sunset catcher"}</span>
+              <span className="whitespace-nowrap">
+                LVL <span className="font-semibold">{yearlyLevel}</span>
+              </span>
             </div>
           )}
         </div>
@@ -101,7 +134,240 @@ export default function AccountInfo({
             </Button>
           ))}
       </div>
-      <div className="mt-4 grid grid-cols-3" />
+      {/* Stats and yearly tracker */}
+      <YearlySunsetStats loading={loading} postTimes={postTimes} />
+    </div>
+  );
+}
+
+function YearlySunsetStats({
+  loading,
+  postTimes,
+}: {
+  loading: boolean;
+  postTimes?: number[];
+}) {
+  // Build a set of local-date keys (YYYY-MM-DD) for posts
+  const toKey = (d: Date) => d.toISOString().slice(0, 10);
+  const postSet = React.useMemo(() => {
+    const s = new Set<string>();
+    (postTimes || []).forEach((ts) => {
+      const d = new Date(ts * 1000);
+      // Normalize to UTC date key for consistency
+      s.add(
+        toKey(
+          new Date(
+            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+          )
+        )
+      );
+    });
+    return s;
+  }, [postTimes]);
+
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+  const yearDays = isLeap ? 366 : 365;
+  // Count unique posting days for the entire calendar year
+  let countYear = 0;
+  for (let i = 0; i < yearDays; i++) {
+    const d = new Date(jan1.getTime() + i * 86_400_000);
+    if (postSet.has(toKey(d))) countYear++;
+  }
+
+  // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31)
+  const startWindow = jan1;
+  const dec31 = new Date(Date.UTC(year, 11, 31));
+  // Align grid to previous Sunday and next Saturday around the full year
+  const startWeekday = startWindow.getUTCDay();
+  const gridStart = new Date(startWindow.getTime() - startWeekday * 86_400_000);
+  const endWeekdayDec31 = dec31.getUTCDay();
+  const gridEnd = new Date(
+    dec31.getTime() + (6 - endWeekdayDec31) * 86_400_000
+  );
+  const totalDays =
+    Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
+  const weeks = Math.ceil(totalDays / 7);
+
+  type Cell = {
+    date: Date;
+    key: string;
+    inWindow: boolean;
+    isFuture: boolean;
+    hasPost: boolean;
+  };
+  const weeksArr: Array<Array<Cell>> = [];
+  for (let w = 0; w < weeks; w++) {
+    const col: Array<Cell> = [];
+    for (let d = 0; d < 7; d++) {
+      const idx = w * 7 + d;
+      const date = new Date(gridStart.getTime() + idx * 86_400_000);
+      const key = toKey(date);
+      const inWindow = date >= startWindow && date <= dec31; // entire year range
+      const isFuture = date > todayUTC && date <= dec31;
+      const hasPost = postSet.has(key);
+      col.push({ date, key, inWindow, isFuture, hasPost });
+    }
+    weeksArr.push(col);
+  }
+
+  // Group consecutive weeks into month chunks
+  type MonthChunk = {
+    label: string;
+    weekStartIndex: number;
+    weekEndIndex: number;
+  };
+  const monthChunks: MonthChunk[] = [];
+  const MONTHS_SHORT = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ] as const;
+  const getWeekMonth = (w: number) => {
+    // Use mid-week day (Wednesday) to determine month for this week
+    const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
+    return mid.getUTCMonth();
+  };
+  const getWeekMonthLabel = (w: number) => {
+    const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
+    return MONTHS_SHORT[mid.getUTCMonth()];
+  };
+  let currentMonth = getWeekMonth(0);
+  let startIdx = 0;
+  for (let w = 1; w < weeks; w++) {
+    const m = getWeekMonth(w);
+    if (m !== currentMonth) {
+      monthChunks.push({
+        label: getWeekMonthLabel(startIdx),
+        weekStartIndex: startIdx,
+        weekEndIndex: w - 1,
+      });
+      currentMonth = m;
+      startIdx = w;
+    }
+  }
+  monthChunks.push({
+    label: getWeekMonthLabel(startIdx),
+    weekStartIndex: startIdx,
+    weekEndIndex: weeks - 1,
+  });
+
+  // Scroll container ref to position today's cell on mount
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const todayEl = container.querySelector(
+      '[data-today="true"]'
+    ) as HTMLElement | null;
+    if (!todayEl) return;
+    // Position today's cell around 3/4 of the visible width (slightly to the right)
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = todayEl.getBoundingClientRect();
+    const targetCenter = targetRect.left + targetRect.width / 2;
+    const desiredX = containerRect.left + containerRect.width * 0.75;
+    const delta = targetCenter - desiredX;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    const next = Math.min(
+      Math.max(container.scrollLeft + delta, 0),
+      Math.max(maxScroll, 0)
+    );
+    container.scrollLeft = next;
+  }, []);
+
+  return (
+    <div className="mt-4">
+      {/* Summary line */}
+      <div className="text-sm md:text-base">
+        {loading ? (
+          <Skeleton className="h-4 w-40" />
+        ) : (
+          <span>
+            <span className="font-semibold">{countYear}</span>/{yearDays}{" "}
+            sunsets caught
+          </span>
+        )}
+      </div>
+
+      {/* Contribution-like grid */}
+      <div
+        ref={scrollRef}
+        className="mt-3 overflow-x-auto px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="w-full flex justify-center">
+          <div className="flex items-start">
+            {monthChunks.map((chunk, idx) => (
+              <div key={`chunk-${idx}`} className={"mx-2 first:ml-0 last:mr-0"}>
+                {/* Month label centered above this month block */}
+                <div className="h-4 mb-1 flex items-end justify-center">
+                  <span className="text-[10px] leading-none opacity-80 select-none">
+                    {chunk.label}
+                  </span>
+                </div>
+                {/* This month's weeks */}
+                <div className="inline-grid auto-cols-max grid-flow-col gap-1">
+                  {weeksArr
+                    .slice(chunk.weekStartIndex, chunk.weekEndIndex + 1)
+                    .map((col, i) => (
+                      <div
+                        key={`w-${chunk.weekStartIndex + i}`}
+                        className="grid grid-rows-7 gap-1"
+                      >
+                        {col.map((cell) => {
+                          const colorClass = cell.isFuture
+                            ? "bg-white"
+                            : cell.inWindow
+                            ? cell.hasPost
+                              ? "bg-amber-400"
+                              : "bg-[#1a1a1a]" // graphite black
+                            : "bg-transparent";
+                          return (
+                            <div
+                              key={cell.key}
+                              className={[
+                                "size-3 md:size-3.5 rounded-full border border-border",
+                                colorClass,
+                              ].join(" ")}
+                              data-key={cell.key}
+                              data-today={
+                                cell.key === toKey(todayUTC)
+                                  ? "true"
+                                  : undefined
+                              }
+                              aria-label={`${cell.date.toDateString()} ${
+                                cell.hasPost
+                                  ? "Posted"
+                                  : cell.isFuture
+                                  ? "Future"
+                                  : "No post"
+                              }`}
+                              title={cell.date.toDateString()}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
