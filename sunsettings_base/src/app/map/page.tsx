@@ -20,6 +20,7 @@ function MapPageInner() {
 
   return (
     <>
+      <div className="fixed top-16 left-0 w-screen h-[calc(100vh-4rem)] z-[9] bg-[#e5e7eb]" />
       <MapCanvas center={center} zoom={zoom} />
       <MapAnalysisOverlay />
     </>
