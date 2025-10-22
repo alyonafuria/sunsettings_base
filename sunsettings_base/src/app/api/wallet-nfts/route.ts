@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, http, type Address, type Abi } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
 function ipfsToHttp(uri: string): string {
@@ -95,11 +95,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Collect tokenIds received by this wallet
-  const mine = txs.filter((t) => String(t?.to).toLowerCase() === String(address).toLowerCase());
+  const mine = txs.filter((t) => String(t.to || "").toLowerCase() === String(address).toLowerCase());
   const seen = new Set<string>();
   const tokenIds: string[] = [];
   for (const t of mine) {
-    const id = String(t?.tokenID ?? t?.tokenId ?? "");
+    const id = String((t.tokenID as unknown as string) ?? (t.tokenId as unknown as string) ?? "");
     if (!id || seen.has(id)) continue;
     seen.add(id);
     tokenIds.push(id);
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
     name: "tokenURI",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [{ name: "", type: "string" }],
-  }] as const;
+  }] as const satisfies Abi;
 
   const items: string[] = [];
   for (const id of tokenIds) {

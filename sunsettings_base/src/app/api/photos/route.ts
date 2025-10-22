@@ -85,6 +85,14 @@ type MetaJson = {
   properties?: MetaProperties
 }
 
+type MetaProps = {
+  photoCellCenterLat?: number
+  photoCellCenterLon?: number
+  photoLocationLabel?: string
+  photoCreatedAt?: string
+  takenAt?: string
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null
 }
@@ -121,6 +129,7 @@ async function resolveMetadata(cid: string): Promise<PhotoMetadata | null> {
   const raw = (await res.json().catch(() => null)) as unknown
   if (!isRecord(raw)) return null
   const data = raw as MetaJson
+  const props: MetaProps | undefined = (isRecord(raw.properties) ? (raw.properties as MetaProps) : undefined)
 
   // latitude / longitude from legacy or properties
   const lat = typeof data.photoCellCenterLat === "number"

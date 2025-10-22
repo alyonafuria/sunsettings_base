@@ -509,7 +509,7 @@ export default function UploadPhotoPanel({
                         address: contractAddress as `0x${string}`,
                         abi: mintAbi,
                         functionName: mintFn,
-                        args: [connectedAddress, `ipfs://${metaCid}`],
+                        args: [connectedAddress as string, `ipfs://${metaCid}`],
                       },
                     ];
                     return (
@@ -761,16 +761,10 @@ export default function UploadPhotoPanel({
               lon: photoCellCenter?.lon ?? null,
               locationLabel: photoLocationLabel ?? null,
               takenAtIso: takenAtIso ?? null,
-              previewUrl: previewUrl || null,
             }
           }))
         } catch {}
       }
-      // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
-      setPreviewUrl(null)
-      setFile(null)
-      setUserDecision(null)
-      setUserScore(null)
     } catch (e) {
       setError((e as Error)?.message || "Upload failed")
     } finally {

@@ -67,7 +67,7 @@ export default function AccountPage() {
       <div className="h-[20vh]">
         <AccountInfo
           loading={!isConnected || isConnecting}
-          avatarUrl={avatarUrl}
+          avatarUrl={null}
           wallet={address ?? null}
           title={"sunset catcher"}
         />
