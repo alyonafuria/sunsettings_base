@@ -11,7 +11,6 @@ export default function AccountPage() {
   // const { disconnect } = useDisconnect(); // not used on this page
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
-  const [avatarUrl] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
 
