@@ -109,10 +109,10 @@ export default function Feed() {
               className="border-b-2 border-black"
             >
               {/* Header with avatar placeholder + author */}
-              <div className="flex items-center gap-2 px-3 py-2">
-                <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-black">
+              <div className="flex items-center gap-3 px-3 py-2">
+                <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-border">
                   <BoringAvatar
-                    size={32}
+                    size={40}
                     name={it.author}
                     variant="bauhaus"
                     colors={[
@@ -124,7 +124,7 @@ export default function Feed() {
                     ]}
                   />
                 </div>
-                <div className="flex-1 truncate text-sm font-medium">
+                <div className="flex-1 truncate text-base font-medium">
                   {getRomanticNameForAddress(it.author)} · {mask(it.author)}
                 </div>
                 <div className="opacity-50 text-lg leading-none select-none">
@@ -145,14 +145,14 @@ export default function Feed() {
                 />
               </div>
               {/* Footer metadata */}
-              <div className="px-3 py-2 text-xs opacity-90">
+              <div className="px-3 py-2 text-sm opacity-90">
                 <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                  <span className="font-medium">
-                    {getRomanticNameForAddress(it.author)}
-                  </span>
-                  <span>·</span>
-                  <span className="opacity-90">{mask(it.author)}</span>
-                  <span>•</span>
+                  {it.locationLabel ? (
+                    <>
+                      <span className="truncate">{it.locationLabel}</span>
+                      <span>•</span>
+                    </>
+                  ) : null}
                   <span>
                     {new Date(it.time * 1000).toLocaleString(undefined, {
                       year: "numeric",
@@ -162,24 +162,18 @@ export default function Feed() {
                       minute: "2-digit",
                     })}
                   </span>
-                  {it.locationLabel ? (
-                    <>
-                      <span>•</span>
-                      <span className="truncate">{it.locationLabel}</span>
-                    </>
-                  ) : null}
                 </div>
               </div>
               {/* Likes placeholder (non-functional) */}
-              <div className="px-3 pb-3 pt-1 text-xs flex items-center gap-4">
+              <div className="px-3 pb-3 pt-1 text-sm flex items-center gap-4">
                 <button
                   type="button"
-                  className="flex items-center gap-1 opacity-80 cursor-default"
+                  className="flex items-center gap-2 opacity-80 cursor-default h-11 px-3 rounded-base"
                   aria-label="Like"
                   disabled
                 >
-                  <span aria-hidden="true">♡</span>
-                  <span>Like</span>
+                  <span aria-hidden="true" className="text-2xl leading-none">♡</span>
+                  <span className="text-base">Like</span>
                 </button>
               </div>
             </li>

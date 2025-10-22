@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   if (apiKey) v2Params.set("apikey", apiKey);
 
   // Try Etherscan V2
-  type TokenTx = { to?: string; tokenID?: string; tokenId?: string };
+  type TokenTx = { to?: string; tokenID?: string; tokenId?: string; timeStamp?: string };
   let txs: TokenTx[] = [];
   const isRecord = (v: unknown): v is Record<string, unknown> =>
     typeof v === "object" && v !== null;
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
             to: typeof v.to === "string" ? v.to : undefined,
             tokenID: typeof v.tokenID === "string" ? v.tokenID : undefined,
             tokenId: typeof v.tokenId === "string" ? v.tokenId : undefined,
+            timeStamp: typeof v.timeStamp === "string" ? v.timeStamp : undefined,
           }))
       : [];
   try {
@@ -102,11 +103,16 @@ export async function GET(req: NextRequest) {
   );
   const seen = new Set<string>();
   const tokenIds: string[] = [];
+  const tokenIdToTime: Record<string, number> = {};
   for (const t of mine) {
     const id = String(t?.tokenID ?? t?.tokenId ?? "");
     if (!id || seen.has(id)) continue;
     seen.add(id);
     tokenIds.push(id);
+    const ts = t?.timeStamp ? Number(t.timeStamp) : undefined;
+    if (typeof ts === "number" && !Number.isNaN(ts)) {
+      tokenIdToTime[id] = ts; // seconds since epoch
+    }
   }
 
   // Resolve tokenURI via RPC
@@ -130,7 +136,7 @@ export async function GET(req: NextRequest) {
     },
   ] as const;
 
-  const items: string[] = [];
+  const items: { image: string; time?: number }[] = [];
   for (const id of tokenIds) {
     try {
       const uri = await client.readContract({
@@ -150,7 +156,7 @@ export async function GET(req: NextRequest) {
         return "";
       };
       const img = ipfsToHttp(getImage(meta));
-      if (img) items.push(img);
+      if (img) items.push({ image: img, time: tokenIdToTime[id] });
     } catch {}
   }
 

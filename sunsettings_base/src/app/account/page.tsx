@@ -17,7 +17,8 @@ export default function AccountPage() {
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
   const [avatarUrl] = React.useState<string | null>(null);
-  const [items, setItems] = React.useState<string[]>([]);
+  type WalletItem = { image: string; time?: number };
+  const [items, setItems] = React.useState<WalletItem[]>([]);
   const [loading, setLoading] = React.useState(false);
 
   const refetch = React.useCallback(async () => {
@@ -33,9 +34,20 @@ export default function AccountPage() {
         cache: "no-store",
       });
       const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
+      const arr: unknown = data?.items;
+      type UnknownItem = { image?: unknown; time?: unknown };
+      const itemsParsed: WalletItem[] = Array.isArray(arr)
+        ? (arr as unknown[])
+            .map((v) => (typeof v === "object" && v !== null ? (v as UnknownItem) : null))
+            .filter((v): v is UnknownItem => !!v && typeof v.image === "string")
+            .map((v) => ({
+              image: String(v.image),
+              time: typeof v.time === "number" ? v.time : undefined,
+            }))
+        : [];
+      setItems(itemsParsed);
     } catch {
-      setItems([]);
+  setItems([]);
     } finally {
       setLoading(false);
     }
@@ -75,14 +87,15 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="w-full min-h-screen flex flex-col">
-      {/* Top section: ~20% viewport height */}
-      <div className="h-[20vh]">
+    <div className="w-full h-full overflow-auto flex flex-col">
+      {/* Top section: content-sized for mobile to avoid overlap */}
+  <div className="shrink-0">
         <AccountInfo
           loading={!isConnected || isConnecting}
           avatarUrl={avatarUrl}
           wallet={address ?? null}
           title={"sunset catcher"}
+          postTimes={items.map((it) => (typeof it.time === "number" ? it.time : undefined)).filter((n): n is number => typeof n === "number")}
         />
         <div className="px-4">
           <button
@@ -97,9 +110,9 @@ export default function AccountPage() {
       </div>
 
       {/* Bottom gallery or connect CTA */}
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         {isConnected ? (
-          <Gallery items={items} />
+          <Gallery items={items.map((it) => it.image)} />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>

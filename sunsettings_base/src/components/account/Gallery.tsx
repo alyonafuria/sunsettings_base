@@ -16,7 +16,7 @@ export default function Gallery({ items }: { items: string[] }) {
   return (
     <div className="grid grid-cols-3 gap-0">
       {items.map((url, idx) => {
-  const col = idx % cols;
+        const col = idx % cols;
         const lastIndex = items.length - 1;
 
         const hasLeft = col > 0 && idx - 1 >= 0;
