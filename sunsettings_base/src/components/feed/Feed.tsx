@@ -115,13 +115,21 @@ export default function Feed() {
                     size={32}
                     name={it.author}
                     variant="bauhaus"
-                    colors={["#ffe3b3", "#ff9a52", "#ff5252", "#c91e5a", "#3d2922"]}
+                    colors={[
+                      "#ffe3b3",
+                      "#ff9a52",
+                      "#ff5252",
+                      "#c91e5a",
+                      "#3d2922",
+                    ]}
                   />
                 </div>
                 <div className="flex-1 truncate text-sm font-medium">
                   {getRomanticNameForAddress(it.author)} · {mask(it.author)}
                 </div>
-                <div className="opacity-50 text-lg leading-none select-none">⋯</div>
+                <div className="opacity-50 text-lg leading-none select-none">
+                  ⋯
+                </div>
               </div>
               {/* Photo */}
               <div className="w-full bg-secondary-background">
@@ -139,7 +147,9 @@ export default function Feed() {
               {/* Footer metadata */}
               <div className="px-3 py-2 text-xs opacity-90">
                 <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                  <span className="font-medium">{getRomanticNameForAddress(it.author)}</span>
+                  <span className="font-medium">
+                    {getRomanticNameForAddress(it.author)}
+                  </span>
                   <span>·</span>
                   <span className="opacity-90">{mask(it.author)}</span>
                   <span>•</span>

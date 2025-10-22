@@ -18,19 +18,41 @@ export async function POST(req: Request) {
 
     // Phase 1: write a minimal set of keyvalues for new metadata pins
     // This does NOT alter the read path. Older pins remain unchanged.
-    const dataObj = (body.data && typeof body.data === "object") ? (body.data as Record<string, unknown>) : {}
-    const props = (typeof dataObj.properties === "object" && dataObj.properties) ? (dataObj.properties as Record<string, unknown>) : {}
+    type MetaProperties = {
+      photoCellCenterLat?: number
+      photoCellCenterLon?: number
+      photoLocationLabel?: string
+      photoCreatedAt?: string
+      takenAt?: string
+      lat?: number
+      lon?: number
+    }
+    type MetaBody = {
+      photoCellCenterLat?: number
+      photoCellCenterLon?: number
+      lat?: number
+      lon?: number
+      image?: string
+      photoCid?: string
+      photoLocationLabel?: string
+      photoCreatedAt?: string
+      takenAt?: string
+      properties?: MetaProperties
+    }
+
+    const dataObj: MetaBody = (body.data && typeof body.data === "object") ? (body.data as MetaBody) : {}
+    const props: MetaProperties = (typeof dataObj.properties === "object" && dataObj.properties) ? dataObj.properties as MetaProperties : {}
     const kv: Record<string, string> = {}
     const asNum = (v: unknown) => (typeof v === "number" && Number.isFinite(v)) ? String(v) : undefined
     const asStr = (v: unknown) => (typeof v === "string" && v.trim().length > 0) ? v.trim() : undefined
     const latStr = asNum(dataObj.photoCellCenterLat ?? dataObj.lat ?? props.photoCellCenterLat ?? props.lat)
     const lonStr = asNum(dataObj.photoCellCenterLon ?? dataObj.lon ?? props.photoCellCenterLon ?? props.lon)
-    let photoCidStr = asStr((dataObj as any).photoCid)
+  let photoCidStr = asStr(dataObj.photoCid)
     if (!photoCidStr && typeof dataObj.image === "string" && dataObj.image.startsWith("ipfs://")) {
       photoCidStr = dataObj.image.slice(7)
     }
-    const labelStr = asStr((dataObj as any).photoLocationLabel ?? props.photoLocationLabel)
-    const createdAtStr = asStr((dataObj as any).photoCreatedAt ?? (dataObj as any).takenAt ?? props.photoCreatedAt ?? (props as any).takenAt)
+  const labelStr = asStr(dataObj.photoLocationLabel ?? props.photoLocationLabel)
+  const createdAtStr = asStr(dataObj.photoCreatedAt ?? dataObj.takenAt ?? props.photoCreatedAt ?? props.takenAt)
     if (photoCidStr) kv.photoCid = photoCidStr
     if (latStr) kv.photoCellCenterLat = latStr
     if (lonStr) kv.photoCellCenterLon = lonStr

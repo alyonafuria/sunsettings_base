@@ -146,8 +146,9 @@ export default function MapCanvas({
 
   // Map initialization runs once on mount. We intentionally do not include `center`/`zoom` here
   // to avoid re-creating the map; subsequent prop changes are handled in the separate effect below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
+    if (mapRef.current) return; // already initialized
+    if (mapRef.current) return; // already initialized
     let cancelled = false
 
     const controller = new AbortController()
@@ -194,7 +195,7 @@ export default function MapCanvas({
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [center, zoom])
 
   React.useEffect(() => {
     const onUploaded = async (e: Event) => {
@@ -504,7 +505,7 @@ export default function MapCanvas({
       })
       markersRef.current = []
     }
-  }, [])
+  }, [center, zoom])
 
   // Recenter if center/zoom props change later
   React.useEffect(() => {

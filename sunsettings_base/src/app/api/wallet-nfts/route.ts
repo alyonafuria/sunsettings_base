@@ -44,12 +44,28 @@ export async function GET(req: NextRequest) {
   if (apiKey) v2Params.set("apikey", apiKey);
 
   // Try Etherscan V2
-  let txs: any[] = [];
+  type TokenTx = { to?: string; tokenID?: string; tokenId?: string };
+  let txs: TokenTx[] = [];
+  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+  const toTokenTxArray = (arr: unknown): TokenTx[] =>
+    Array.isArray(arr)
+      ? arr
+          .map((v) => (isRecord(v) ? (v as Record<string, unknown>) : null))
+          .filter((v): v is Record<string, unknown> => !!v)
+          .map((v) => ({
+            to: typeof v.to === 'string' ? v.to : undefined,
+            tokenID: typeof v.tokenID === 'string' ? v.tokenID : undefined,
+            tokenId: typeof v.tokenId === 'string' ? v.tokenId : undefined,
+          }))
+      : [];
   try {
     const v2Url = `https://api.etherscan.io/v2/api?${v2Params.toString()}`;
     const v2Res = await fetch(v2Url, { next: { revalidate: 10 } });
-    const v2Data = await v2Res.json();
-    if (Array.isArray(v2Data?.result)) txs = v2Data.result;
+    const v2Data = (await v2Res.json().catch(() => null)) as unknown;
+    if (isRecord(v2Data)) {
+      const result = (v2Data as Record<string, unknown>).result;
+      txs = toTokenTxArray(result);
+    }
   } catch {}
 
   // Fallback to Basescan if empty
@@ -70,8 +86,11 @@ export async function GET(req: NextRequest) {
       if (apiKey) qs.set("apikey", apiKey);
       const url = `${apiBase}?${qs.toString()}`;
       const res = await fetch(url, { next: { revalidate: 10 } });
-      const data = await res.json();
-      txs = Array.isArray(data?.result) ? data.result : [];
+      const data = (await res.json().catch(() => null)) as unknown;
+      if (isRecord(data)) {
+        const result = (data as Record<string, unknown>).result;
+        txs = toTokenTxArray(result);
+      }
     } catch {}
   }
 
@@ -91,7 +110,7 @@ export async function GET(req: NextRequest) {
     ? process.env.BASE_RPC_URL
     : process.env.BASE_SEPOLIA_RPC_URL;
   const chain = isBaseMainnet ? base : baseSepolia;
-  const fallbackRpc = (chain.rpcUrls as any).default?.http?.[0];
+  const fallbackRpc = chain.rpcUrls.default?.http?.[0];
   const client = createPublicClient({ chain, transport: http(rpcUrl || fallbackRpc) });
 
   const abi = [{
@@ -107,14 +126,21 @@ export async function GET(req: NextRequest) {
     try {
       const uri = await client.readContract({
         address: contractAddress as Address,
-        abi: abi as any,
+        abi,
         functionName: "tokenURI",
         args: [BigInt(id)],
       });
       const metaUrl = ipfsToHttp(String(uri));
       const metaRes = await fetch(metaUrl, { next: { revalidate: 60 } });
-      const meta = await metaRes.json();
-      const img = ipfsToHttp(String(meta?.image || ""));
+      const meta = (await metaRes.json().catch(() => null)) as unknown;
+      const getImage = (m: unknown): string => {
+        if (m && typeof m === 'object') {
+          const r = m as Record<string, unknown>;
+          if (typeof r.image === 'string') return r.image;
+        }
+        return "";
+      };
+      const img = ipfsToHttp(getImage(meta));
       if (img) items.push(img);
     } catch {}
   }

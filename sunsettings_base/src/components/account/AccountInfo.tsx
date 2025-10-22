@@ -51,7 +51,13 @@ export default function AccountInfo({
                   size={64}
                   name={String(wallet ?? address ?? "sunsettings")}
                   variant="bauhaus"
-                  colors={["#ffe3b3", "#ff9a52", "#ff5252", "#c91e5a", "#3d2922"]}
+                  colors={[
+                    "#ffe3b3",
+                    "#ff9a52",
+                    "#ff5252",
+                    "#c91e5a",
+                    "#3d2922",
+                  ]}
                 />
               </AvatarFallback>
             )}
@@ -62,7 +68,8 @@ export default function AccountInfo({
             <Skeleton className="h-4 w-1/3" />
           ) : (
             <div className="text-base font-semibold truncate">
-              {getRomanticNameForAddress(wallet ?? address ?? null)} · {mask(wallet ?? address ?? null)}
+              {getRomanticNameForAddress(wallet ?? address ?? null)} ·{" "}
+              {mask(wallet ?? address ?? null)}
             </div>
           )}
           {loading ? (

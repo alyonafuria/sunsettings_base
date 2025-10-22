@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useAccount, useConnect } from "wagmi"
+import type { Abi } from "viem"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import Image from "next/image"
@@ -49,7 +50,7 @@ export default function UploadPhotoPanel({
   coords?: { lat?: number; lon?: number }
   onLocationMismatchChange?: (mismatch: boolean) => void
 }) {
-  const { address: connectedAddress, chainId, isConnected } = useAccount();
+  const { address: connectedAddress, isConnected } = useAccount();
   const currentChainId = 8453;
   const { connectors, connectAsync, status: connectStatus } = useConnect()
   const connectCoinbase = async () => {
@@ -478,7 +479,7 @@ export default function UploadPhotoPanel({
                         ],
                         outputs: [],
                       },
-                    ];
+                    ] as const satisfies Abi;
                     if (!isConnected) {
                       return (
                         <div className="space-y-2">
@@ -497,10 +498,16 @@ export default function UploadPhotoPanel({
                         </div>
                       );
                     }
-                    const contracts = [
+                    type ContractCall = {
+                      address: `0x${string}`
+                      abi: Abi
+                      functionName: string
+                      args: [string | undefined, string]
+                    }
+                    const contracts: ContractCall[] = [
                       {
                         address: contractAddress as `0x${string}`,
-                        abi: mintAbi as any,
+                        abi: mintAbi,
                         functionName: mintFn,
                         args: [connectedAddress, `ipfs://${metaCid}`],
                       },
@@ -508,7 +515,7 @@ export default function UploadPhotoPanel({
                     return (
                       <Transaction
                         isSponsored
-                        calls={contracts as any}
+                        calls={contracts}
                         className="w-full"
                         chainId={currentChainId}
                       >

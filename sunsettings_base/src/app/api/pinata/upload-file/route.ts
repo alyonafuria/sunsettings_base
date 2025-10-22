@@ -10,16 +10,8 @@ export async function POST(req: Request) {
     const form = await req.formData()
     const file = form.get("file") as File | null
     const name = (form.get("name") as string) || undefined
-    const scorePercentStr = (form.get("scorePercent") as string) || undefined
-    const scoreLabel = (form.get("scoreLabel") as string) || undefined
-    const locationLabel = (form.get("locationLabel") as string) || undefined
-    const userScorePercentStr = (form.get("userScorePercent") as string) || undefined
     // Tamper-proof extras
     const deviceId = (form.get("deviceId") as string) || undefined
-    const gpsLat = (form.get("gpsLat") as string) || undefined
-    const gpsLon = (form.get("gpsLon") as string) || undefined
-    const gpsAccuracy = (form.get("gpsAccuracy") as string) || undefined
-    const gpsFixAtIso = (form.get("gpsFixAtIso") as string) || undefined
     const captureTimestamp = (form.get("captureTimestamp") as string) || undefined
     const prehashSha256 = (form.get("prehashSha256") as string) || undefined
 
