@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export default function Gallery({ items }: { items: string[] }) {
   if (!items || items.length === 0) {
     return (
@@ -11,14 +13,16 @@ export default function Gallery({ items }: { items: string[] }) {
 
   return (
     <div className="grid grid-cols-3 gap-0">
-      {items.map((url) => (
-        <div key={url} className="relative w-full pt-[100%]">
-          <img
+      {items.map((url, idx) => (
+        <div key={`${url}-${idx}`} className="relative w-full pt-[100%]">
+          <Image
             src={url}
             alt="sunsettings photo"
+            fill
+            sizes="33vw"
             className="absolute inset-0 h-full w-full object-cover border-2 border-black"
-            loading="lazy"
-            referrerPolicy="no-referrer"
+            priority={false}
+            unoptimized
           />
         </div>
       ))}
