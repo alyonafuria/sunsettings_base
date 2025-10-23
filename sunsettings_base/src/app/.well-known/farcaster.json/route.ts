@@ -15,7 +15,7 @@ return new Response(JSON.stringify({
     "allowedAddresses": ["0xC6a8Ba6F67C52f2F489069aa44570938334C11F6"]
   },
   "miniapp": {
-    "version": "1",
+    "version": "2",
     "name": "sunsettings",
     "homeUrl": "https://catch.sunsettings.app",
     "iconUrl": "https://catch.sunsettings.app/icon.png",
@@ -36,7 +36,7 @@ return new Response(JSON.stringify({
     "ogTitle": "sunsettings",
     "ogDescription": "get prediction of sunset beauty, share your photos with the world and track sunset catching progress",
     "ogImageUrl": "https://catch.sunsettings.app/icon.png",
-    "noindex": true
+    "noindex": false
   }
 }), {
   headers: {
