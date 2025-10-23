@@ -15,7 +15,7 @@ return new Response(JSON.stringify({
     "allowedAddresses": ["0xC6a8Ba6F67C52f2F489069aa44570938334C11F6"]
   },
   "miniapp": {
-    "version": "2",
+    "version": "1",
     "name": "sunsettings",
     "homeUrl": "https://catch.sunsettings.app",
     "iconUrl": "https://catch.sunsettings.app/icon.png",
