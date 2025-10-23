@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 
@@ -9,6 +11,7 @@ export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
   const { connectors, connectAsync, status: connectStatus, error: connectError } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
+  const inMiniApp = useMiniAppContext();
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
   const [items, setItems] = React.useState<string[]>([]);
@@ -60,6 +63,19 @@ export default function AccountPage() {
     } catch {}
   };
 
+  const signInFarcaster = async () => {
+    try {
+      const bytes = new Uint8Array(16);
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      const nonce = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join("");
+      await sdk.actions.signIn({ nonce });
+    } catch {}
+  };
+
   return (
     <div className="w-full min-h-screen flex flex-col">
       {/* Top section: ~20% viewport height */}
@@ -90,14 +106,24 @@ export default function AccountPage() {
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
               <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
-              <button
-                type="button"
-                onClick={connectCoinbase}
-                className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
-                disabled={connectStatus === 'pending'}
-              >
-                {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
-              </button>
+              {inMiniApp ? (
+                <button
+                  type="button"
+                  onClick={signInFarcaster}
+                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
+                >
+                  Sign in with Farcaster
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={connectCoinbase}
+                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
+                  disabled={connectStatus === 'pending'}
+                >
+                  {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
+                </button>
+              )}
               {connectError ? (
                 <div className="mt-2 text-xs text-red-600">{String(connectError.message || 'Connection failed')}</div>
               ) : null}

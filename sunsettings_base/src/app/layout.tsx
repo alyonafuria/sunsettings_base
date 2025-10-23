@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import Link from "next/link";
 import { Menubar } from "@/components/ui/menubar";
+import AddMiniAppButton from "@/components/AddMiniAppButton";
 import "./globals.css";
 import { Providers } from "./providers";
 import FarcasterReady from "@/components/FarcasterReady";
@@ -84,7 +85,9 @@ export default function RootLayout({
               >
                 sunsettings
               </Link>
-              <nav className="flex-1" />
+              <nav className="flex-1 flex items-center justify-end pr-3">
+                <AddMiniAppButton />
+              </nav>
             </div>
           </Menubar>
           <main className="absolute z-10 h-[calc(100vh-4rem)] w-screen overflow-hidden pt-16 pb-16">
