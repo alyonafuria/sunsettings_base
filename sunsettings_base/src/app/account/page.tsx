@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
+import { Button } from "@/components/ui/button";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 
@@ -15,19 +16,16 @@ export default function AccountPage() {
   } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
 
-  // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
-  const [avatarUrl] = React.useState<string | null>(null);
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
-  const refetchingRef = React.useRef(false);
+  const [, setLoading] = React.useState(false);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    if (refetchingRef.current) return;
-    refetchingRef.current = true;
+    setLoading(true);
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
@@ -52,7 +50,7 @@ export default function AccountPage() {
     } catch {
       setItems([]);
     } finally {
-      refetchingRef.current = false;
+      setLoading(false);
     }
   }, [isConnected, address, chainId]);
 
@@ -102,6 +100,7 @@ export default function AccountPage() {
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}
         />
+        {/* Removed Refresh link per request */}
       </div>
 
       {/* Bottom gallery or connect CTA */}
@@ -111,17 +110,17 @@ export default function AccountPage() {
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
-              <div className="mb-2 text-sm">
-                Sign up / Log in to catch sunsets
-              </div>
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={connectCoinbase}
-                className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
                 disabled={connectStatus === "pending"}
               >
-                {connectStatus === "pending" ? "Connecting…" : "Connect wallet"}
-              </button>
+                {connectStatus === "pending"
+                  ? "Connecting…"
+                  : "Sign up / Log in"}
+              </Button>
+              <div className="mt-2 text-sm">to start catching sunsets</div>
               {connectError ? (
                 <div className="mt-2 text-xs text-red-600">
                   {String(connectError.message || "Connection failed")}
