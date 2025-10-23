@@ -4,7 +4,7 @@ import * as React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import BoringAvatar from "boring-avatars";
 import { getRomanticNameForAddress } from "@/lib/romanticNames";
 
@@ -23,7 +23,8 @@ export default function AccountInfo({
 }) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-  const { connectors, connectAsync } = useConnect();
+  // No connect usage here; Account page handles connection CTA when logged out
+  // const { connectors, connectAsync } = useConnect();
 
   const mask = (addr?: string | null) => {
     if (!addr) return "";
@@ -258,29 +259,32 @@ function YearlySunsetStats({
     weekEndIndex: weeks - 1,
   });
 
-  // Scroll container ref to position today's cell on mount
+  // Scroll container ref to position today's cell after load
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
+    if (loading) return; // wait until content is rendered
     const container = scrollRef.current;
     if (!container) return;
     const todayEl = container.querySelector(
       '[data-today="true"]'
     ) as HTMLElement | null;
     if (!todayEl) return;
-    // Position today's cell around 3/4 of the visible width (slightly to the right)
-    const containerRect = container.getBoundingClientRect();
-    const targetRect = todayEl.getBoundingClientRect();
-    const targetCenter = targetRect.left + targetRect.width / 2;
-    const desiredX = containerRect.left + containerRect.width * 0.75;
-    const delta = targetCenter - desiredX;
-    const maxScroll = container.scrollWidth - container.clientWidth;
-    const next = Math.min(
-      Math.max(container.scrollLeft + delta, 0),
-      Math.max(maxScroll, 0)
-    );
-    container.scrollLeft = next;
-  }, []);
+    const scrollNow = () => {
+      // Place today's center at ~75% of visible width
+      const targetCenter = todayEl.offsetLeft + todayEl.offsetWidth / 2;
+      const desiredCenter = container.clientWidth * 0.75;
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      const next = Math.min(
+        Math.max(targetCenter - desiredCenter, 0),
+        Math.max(maxScroll, 0)
+      );
+      container.scrollLeft = next;
+    };
+    // Defer to next frame to ensure layout is final
+    const raf = window.requestAnimationFrame(scrollNow);
+    return () => window.cancelAnimationFrame(raf);
+  }, [loading, postTimes]);
 
   return (
     <div className="mt-4">
@@ -301,64 +305,73 @@ function YearlySunsetStats({
         ref={scrollRef}
         className="mt-3 overflow-x-auto px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <div className="w-full flex justify-center">
-          <div className="flex items-start">
-            {monthChunks.map((chunk, idx) => (
-              <div key={`chunk-${idx}`} className={"mx-2 first:ml-0 last:mr-0"}>
-                {/* Month label centered above this month block */}
-                <div className="h-4 mb-1 flex items-end justify-center">
-                  <span className="text-[10px] leading-none opacity-80 select-none">
-                    {chunk.label}
-                  </span>
-                </div>
-                {/* This month's weeks */}
-                <div className="inline-grid auto-cols-max grid-flow-col gap-1">
-                  {weeksArr
-                    .slice(chunk.weekStartIndex, chunk.weekEndIndex + 1)
-                    .map((col, i) => (
-                      <div
-                        key={`w-${chunk.weekStartIndex + i}`}
-                        className="grid grid-rows-7 gap-1"
-                      >
-                        {col.map((cell) => {
-                          const colorClass = cell.isFuture
-                            ? "bg-white"
-                            : cell.inWindow
-                            ? cell.hasPost
-                              ? "bg-amber-400"
-                              : "bg-[#1a1a1a]" // graphite black
-                            : "bg-transparent";
-                          return (
-                            <div
-                              key={cell.key}
-                              className={[
-                                "size-3 md:size-3.5 rounded-full border border-border",
-                                colorClass,
-                              ].join(" ")}
-                              data-key={cell.key}
-                              data-today={
-                                cell.key === toKey(todayUTC)
-                                  ? "true"
-                                  : undefined
-                              }
-                              aria-label={`${cell.date.toDateString()} ${
-                                cell.hasPost
-                                  ? "Posted"
-                                  : cell.isFuture
-                                  ? "Future"
-                                  : "No post"
-                              }`}
-                              title={cell.date.toDateString()}
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            ))}
+        {loading ? (
+          <div className="w-full">
+            <Skeleton className="h-40 md:h-44 w-full" />
           </div>
-        </div>
+        ) : (
+          <div className="w-full flex justify-center">
+            <div className="flex items-start">
+              {monthChunks.map((chunk, idx) => (
+                <div
+                  key={`chunk-${idx}`}
+                  className={"mx-2 first:ml-0 last:mr-0"}
+                >
+                  {/* Month label centered above this month block */}
+                  <div className="h-4 mb-1 flex items-end justify-center">
+                    <span className="text-[10px] leading-none opacity-80 select-none">
+                      {chunk.label}
+                    </span>
+                  </div>
+                  {/* This month's weeks */}
+                  <div className="inline-grid auto-cols-max grid-flow-col gap-1">
+                    {weeksArr
+                      .slice(chunk.weekStartIndex, chunk.weekEndIndex + 1)
+                      .map((col, i) => (
+                        <div
+                          key={`w-${chunk.weekStartIndex + i}`}
+                          className="grid grid-rows-7 gap-1"
+                        >
+                          {col.map((cell) => {
+                            const colorClass = cell.isFuture
+                              ? "bg-white"
+                              : cell.inWindow
+                              ? cell.hasPost
+                                ? "bg-amber-400"
+                                : "bg-[#1a1a1a]" // graphite black
+                              : "bg-transparent";
+                            return (
+                              <div
+                                key={cell.key}
+                                className={[
+                                  "size-3 md:size-3.5 rounded-full border border-border",
+                                  colorClass,
+                                ].join(" ")}
+                                data-key={cell.key}
+                                data-today={
+                                  cell.key === toKey(todayUTC)
+                                    ? "true"
+                                    : undefined
+                                }
+                                aria-label={`${cell.date.toDateString()} ${
+                                  cell.hasPost
+                                    ? "Posted"
+                                    : cell.isFuture
+                                    ? "Future"
+                                    : "No post"
+                                }`}
+                                title={cell.date.toDateString()}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
