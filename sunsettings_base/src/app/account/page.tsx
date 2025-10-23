@@ -17,6 +17,7 @@ export default function AccountPage() {
   } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
   const inMiniApp = useMiniAppContext();
+  const isMini = inMiniApp ?? true;
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
   type WalletItem = { image: string; time?: number };
@@ -127,7 +128,7 @@ export default function AccountPage() {
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
               <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
-              {inMiniApp ? (
+              {isMini ? (
                 <button
                   type="button"
                   onClick={signInFarcaster}
