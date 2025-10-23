@@ -18,11 +18,13 @@ export function Providers(props: { children: ReactNode }) {
   const chain = base;
   const paymaster = paymasterMainnet;
   const inMiniApp = useMiniAppContext();
-  const wagmiConfig = useMemo(() => (inMiniApp ? getMiniAppConfig() : getConfig()), [inMiniApp]);
+  // Be conservative: while detection is pending (null), assume Mini App to avoid mounting OnchainKit
+  const isMini = inMiniApp ?? true;
+  const wagmiConfig = useMemo(() => (isMini ? getMiniAppConfig() : getConfig()), [isMini]);
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        {inMiniApp ? (
+        {isMini ? (
           // In Farcaster/Base App, avoid OnchainKit smart wallet modal entirely
           props.children
         ) : (

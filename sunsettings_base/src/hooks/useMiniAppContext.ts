@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { sdk } from "@farcaster/miniapp-sdk";
 
 export function useMiniAppContext() {
-  const [inMiniApp, setInMiniApp] = useState(false);
+  const [inMiniApp, setInMiniApp] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
