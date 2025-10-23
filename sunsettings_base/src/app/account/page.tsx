@@ -19,7 +19,6 @@ export default function AccountPage() {
   const inMiniApp = useMiniAppContext();
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
-  const [avatarUrl] = React.useState<string | null>(null);
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
   const refetchingRef = React.useRef(false);
