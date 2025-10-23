@@ -60,33 +60,7 @@ export function getMiniAppConfig() {
   });
 }
 
-// Prefer the Base/Farcaster injected provider when running inside the Mini App.
-// Avoid forcing smart wallets here to prevent Base smart wallet modal from opening.
-export function getMiniAppConfig() {
-  return createConfig({
-    chains: [base],
-    connectors: [
-      injected(),
-      coinbaseWallet({
-        appName: 'Sunsettings',
-        preference: 'eoaOnly',
-        version: '4',
-      }),
-      metaMask({
-        dappMetadata: {
-          name: 'Sunsettings',
-        },
-      }),
-    ],
-    storage: createStorage({
-      storage: cookieStorage,
-    }),
-    ssr: true,
-    transports: {
-      [base.id]: http(),
-    },
-  });
-}
+// (duplicate getMiniAppConfig removed)
 
 declare module "wagmi" {
   interface Register {
