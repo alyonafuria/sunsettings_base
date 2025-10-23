@@ -89,7 +89,7 @@ export default function RootLayout({
               <nav className="px-3" />
             </div>
           </Menubar>
-          <main className="absolute z-10 h-[calc(100vh-4rem)] w-screen overflow-hidden pt-16 pb-16">
+          <main className="absolute z-10 h-[calc(100vh-4rem)] w-screen overflow-hidden pt-16">
             {children}
           </main>
           <Menubar className="fixed bottom-0 left-0 right-0 h-16 px-4 z-20 md:hidden border-t-2 border-border">

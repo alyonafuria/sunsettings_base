@@ -91,15 +91,23 @@ export default function AccountInfo({
                 )}
               </Avatar>
             )}
-            <div className="flex-1 space-y-2">
+            <div className="flex-1 space-y-1">
               {loading ? (
                 <Skeleton className="h-4 w-1/3" />
               ) : (
                 <div className="text-base font-semibold truncate">
-                  {getRomanticNameForAddress(wallet ?? address ?? null)} ·{" "}
-                  {mask(wallet ?? address ?? null)}
+                  {getRomanticNameForAddress(wallet ?? address ?? null)}
                 </div>
               )}
+
+              {loading ? (
+                <Skeleton className="h-3 w-24" />
+              ) : (wallet ?? address) ? (
+                <div className="text-xs text-muted-foreground truncate">
+                  {mask(wallet ?? address ?? null)}
+                </div>
+              ) : null}
+
               {loading ? (
                 <Skeleton className="h-3 w-1/2" />
               ) : (
