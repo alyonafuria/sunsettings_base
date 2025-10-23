@@ -166,11 +166,12 @@ function YearlySunsetStats({
     return s;
   }, [postTimes]);
 
-  const now = new Date();
+  const now = React.useMemo(() => new Date(), []);
   const year = now.getUTCFullYear();
-  const jan1 = new Date(Date.UTC(year, 0, 1));
-  const todayUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const jan1 = React.useMemo(() => new Date(Date.UTC(year, 0, 1)), [year]);
+  const todayUTC = React.useMemo(
+    () => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+    [now]
   );
   const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
   const yearDays = isLeap ? 366 : 365;
@@ -180,6 +181,27 @@ function YearlySunsetStats({
     const d = new Date(jan1.getTime() + i * 86_400_000);
     if (postSet.has(toKey(d))) countYear++;
   }
+
+  // Compute longest and current streaks (within current year, up to today)
+  const { longestStreak, currentStreak } = React.useMemo(() => {
+    let longest = 0;
+    let current = 0;
+    // iterate from Jan 1 to today (inclusive)
+    const daysToToday = Math.floor(
+      (todayUTC.getTime() - jan1.getTime()) / 86_400_000
+    );
+    for (let i = 0; i <= daysToToday; i++) {
+      const d = new Date(jan1.getTime() + i * 86_400_000);
+      const key = toKey(d);
+      if (postSet.has(key)) {
+        current += 1;
+        if (current > longest) longest = current;
+      } else {
+        current = 0;
+      }
+    }
+    return { longestStreak: longest, currentStreak: current };
+  }, [postSet, jan1, todayUTC]);
 
   // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31)
   const startWindow = jan1;
@@ -296,14 +318,32 @@ function YearlySunsetStats({
 
   return (
     <div className="mt-4">
-      {/* Summary line */}
-      <div className="text-sm md:text-base">
+      {/* Streak stats */}
+      <div className="mt-1 space-y-1 text-sm md:text-base">
+        {loading ? (
+          <>
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 w-28" />
+          </>
+        ) : (
+          <>
+            <div>
+              Longest streak: <span className="font-semibold">{longestStreak}</span>
+            </div>
+            <div>
+              Current streak: <span className="font-semibold">{currentStreak}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Summary line moved below streaks */}
+      <div className="mt-1 text-sm md:text-base">
         {loading ? (
           <Skeleton className="h-4 w-40" />
         ) : (
           <span>
-            <span className="font-semibold">{countYear}</span>/{yearDays}{" "}
-            sunsets caught
+            Sunsets caught: <span className="font-semibold">{countYear}</span>/{yearDays}
           </span>
         )}
       </div>
