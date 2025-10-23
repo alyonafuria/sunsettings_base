@@ -18,8 +18,8 @@ export function Providers(props: { children: ReactNode }) {
   const chain = base;
   const paymaster = paymasterMainnet;
   const inMiniApp = useMiniAppContext();
-  // Be conservative: while detection is pending (null), assume Mini App to avoid mounting OnchainKit
-  const isMini = inMiniApp ?? true;
+  // Strict: only Mini App when detection returns true. Base app + web get OnchainKit.
+  const isMini = inMiniApp === true;
   const wagmiConfig = useMemo(() => (isMini ? getMiniAppConfig() : getConfig()), [isMini]);
   return (
     <WagmiProvider config={wagmiConfig}>

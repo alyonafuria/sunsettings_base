@@ -17,7 +17,7 @@ export default function AccountPage() {
   } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
   const inMiniApp = useMiniAppContext();
-  const isMini = inMiniApp ?? true;
+  const isMini = inMiniApp === true;
 
   // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
   type WalletItem = { image: string; time?: number };
@@ -92,7 +92,15 @@ export default function AccountPage() {
     } catch {}
   };
 
+  const [authPending, setAuthPending] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
+  const [fcAuthed, setFcAuthed] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return sessionStorage.getItem('fc_authed') === '1'; } catch { return false; }
+  });
   const signInFarcaster = async () => {
+    setAuthError(null);
+    setAuthPending(true);
     try {
       const bytes = new Uint8Array(16);
       if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -101,8 +109,21 @@ export default function AccountPage() {
         for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
       }
       const nonce = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join("");
-      await sdk.actions.signIn({ nonce });
-    } catch {}
+      if (!(sdk as any)?.actions?.signIn) {
+        throw new Error('Farcaster signIn is unavailable in this context');
+      }
+      const res = await sdk.actions.signIn({ nonce });
+      // Log for debugging; UI remains on the same page
+      console.log('Farcaster signIn result:', res);
+      setFcAuthed(true);
+      try { sessionStorage.setItem('fc_authed', '1'); } catch {}
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sign-in failed';
+      console.warn('Farcaster signIn error:', e);
+      setAuthError(msg);
+    } finally {
+      setAuthPending(false);
+    }
   };
 
   return (
@@ -129,13 +150,18 @@ export default function AccountPage() {
             <div>
               <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
               {isMini ? (
-                <button
-                  type="button"
-                  onClick={signInFarcaster}
-                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
-                >
-                  Sign in with Farcaster
-                </button>
+                fcAuthed ? (
+                  <div className="text-sm">Signed in with Farcaster</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={signInFarcaster}
+                    className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90 disabled:opacity-50"
+                    disabled={authPending}
+                  >
+                    {authPending ? 'Signing in…' : 'Sign in with Farcaster'}
+                  </button>
+                )
               ) : (
                 <button
                   type="button"
@@ -149,6 +175,11 @@ export default function AccountPage() {
               {connectError ? (
                 <div className="mt-2 text-xs text-red-600">
                   {String(connectError.message || "Connection failed")}
+                </div>
+              ) : null}
+              {authError ? (
+                <div className="mt-2 text-xs text-red-600">
+                  {authError}
                 </div>
               ) : null}
             </div>
