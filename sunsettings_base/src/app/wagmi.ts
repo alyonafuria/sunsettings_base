@@ -22,9 +22,7 @@ export function getConfig() {
       }),
       injected(),
     ],
-    storage: createStorage({
-      storage: cookieStorage,
-    }),
+    storage: createStorage({ storage: cookieStorage, key: "wagmi-web" }),
     ssr: true,
     transports: {
       [base.id]: http(),
@@ -37,22 +35,10 @@ export function getConfig() {
 export function getMiniAppConfig() {
   return createConfig({
     chains: [base],
-    connectors: [
-      injected(),
-      coinbaseWallet({
-        appName: 'Sunsettings',
-        preference: 'eoaOnly',
-        version: '4',
-      }),
-      metaMask({
-        dappMetadata: {
-          name: 'Sunsettings',
-        },
-      }),
-    ],
-    storage: createStorage({
-      storage: cookieStorage,
-    }),
+    // Only the host (Base App/Farcaster) injected provider
+    connectors: [injected()],
+    // Use a different storage key to avoid reusing prior web connector state
+    storage: createStorage({ storage: cookieStorage, key: "wagmi-miniapp" }),
     ssr: true,
     transports: {
       [base.id]: http(),
