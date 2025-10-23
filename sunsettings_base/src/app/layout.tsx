@@ -67,21 +67,23 @@ export default function RootLayout({
         <Providers>
           <FarcasterReady />
           <Menubar className="fixed left-0 right-0 top-0 h-16 px-2 z-20">
-            <div className="flex w-full items-center">
-              <div className="flex-1 hidden md:flex items-center gap-4 px-3">
-                <Link href="/" className="text-sm font-medium">
-                  Home
-                </Link>
-                <Link href="/feed" className="text-sm font-medium">
-                  Feed
-                </Link>
-                <Link href="/account" className="text-sm font-medium">
-                  Account
-                </Link>
+            <div className="grid w-full grid-cols-3 items-center">
+              <div className="px-3">
+                <div className="hidden md:flex items-center gap-4">
+                  <Link href="/" className="text-sm font-medium">
+                    Home
+                  </Link>
+                  <Link href="/feed" className="text-sm font-medium">
+                    Feed
+                  </Link>
+                  <Link href="/account" className="text-sm font-medium">
+                    Account
+                  </Link>
+                </div>
               </div>
               <Link
                 href="/"
-                className={`flex-1 text-center ${sunsettingsHeadline.className} text-white text-5xl md:text-4xl leading-none tracking-tight`}
+                className={`${sunsettingsHeadline.className} col-start-2 justify-self-center text-center text-white text-5xl md:text-4xl leading-none tracking-tight`}
               >
                 sunsettings
               </Link>
@@ -93,20 +95,32 @@ export default function RootLayout({
           <main className="absolute z-10 h-[calc(100vh-4rem)] w-screen overflow-hidden pt-16 pb-16">
             {children}
           </main>
-          <Menubar className="fixed bottom-0 left-0 right-0 h-16 px-4 z-20 md:hidden border-t-2 border-black">
+          <Menubar className="fixed bottom-0 left-0 right-0 h-16 px-4 z-20 md:hidden border-t-2 border-border">
             <nav className="flex h-full w-full">
-              <div className="flex-1 h-full flex items-center justify-center">
-                <Link href="/" className="text-sm font-medium">
+              <div className="flex-1 h-full">
+                <Link
+                  href="/"
+                  className="flex w-full h-full items-center justify-center text-base font-medium"
+                  aria-label="Go to Home"
+                >
                   Home
                 </Link>
               </div>
-              <div className="flex-1 h-full flex items-center justify-center border-l-2 border-black">
-                <Link href="/feed" className="text-sm font-medium">
+              <div className="flex-1 h-full border-l-2 border-border">
+                <Link
+                  href="/feed"
+                  className="flex w-full h-full items-center justify-center text-base font-medium"
+                  aria-label="Go to Feed"
+                >
                   Feed
                 </Link>
               </div>
-              <div className="flex-1 h-full flex items-center justify-center border-l-2 border-black">
-                <Link href="/account" className="text-sm font-medium">
+              <div className="flex-1 h-full border-l-2 border-border">
+                <Link
+                  href="/account"
+                  className="flex w-full h-full items-center justify-center text-base font-medium"
+                  aria-label="Go to Account"
+                >
                   Account
                 </Link>
               </div>

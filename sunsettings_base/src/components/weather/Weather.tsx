@@ -1,76 +1,101 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 
 // Removed unused BrightSky direct fetch helper to reduce bundle and lint warnings
 
-export default function Weather({ lat, lon }: { lat?: number | null; lon?: number | null }) {
-  const [summary, setSummary] = React.useState<string>("")
-  const [loading, setLoading] = React.useState(false)
-  const [raw, setRaw] = React.useState<unknown>(null)
-  const [open, setOpen] = React.useState(false)
+export default function Weather({
+  lat,
+  lon,
+}: {
+  lat?: number | null;
+  lon?: number | null;
+}) {
+  const [summary, setSummary] = React.useState<string>("");
+  const [loading, setLoading] = React.useState(false);
+  const [raw, setRaw] = React.useState<unknown>(null);
+  const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
-    let alive = true
+    let alive = true;
     async function run() {
       if (typeof lat === "number" && typeof lon === "number") {
-        setLoading(true)
-        setRaw(null)
-        let s = ""
+        setLoading(true);
+        setRaw(null);
+        let s = "";
         try {
-          const res = await fetch(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { cache: "no-store" })
+          const res = await fetch(
+            `/api/weather?lat=${encodeURIComponent(
+              lat
+            )}&lon=${encodeURIComponent(lon)}`,
+            { cache: "no-store" }
+          );
           if (res.ok) {
-            const data = await res.json().catch(() => null)
-            s = typeof data?.weatherSummary === "string" ? data.weatherSummary : ""
+            const data = await res.json().catch(() => null);
+            s =
+              typeof data?.weatherSummary === "string"
+                ? data.weatherSummary
+                : "";
           } else {
-            s = ""
+            s = "";
           }
         } catch {
-          s = ""
+          s = "";
         }
         if (alive) {
-          setSummary(s)
-          setLoading(false)
+          setSummary(s);
+          setLoading(false);
         }
       } else {
-        setSummary("")
-        setRaw(null)
+        setSummary("");
+        setRaw(null);
       }
     }
-    run()
+    run();
     return () => {
-      alive = false
-    }
-  }, [lat, lon])
+      alive = false;
+    };
+  }, [lat, lon]);
 
   if (typeof lat !== "number" || typeof lon !== "number") {
     return (
       <div className="text-xs opacity-80 w-full max-w-[90vw] md:max-w-xl">
         Pick or detect a location to fetch weather.
       </div>
-    )
+    );
   }
 
   return (
     <div className="text-xs opacity-80 w-full max-w-[90vw] md:max-w-xl">
-      <div className="mb-1">lat: {lat.toFixed(6)}, lon: {lon.toFixed(6)}</div>
-      <div className="mb-2">{loading ? "Fetching weather…" : summary || "No weather data."}</div>
+      <div className="mb-1">
+        lat: {lat.toFixed(6)}, lon: {lon.toFixed(6)}
+      </div>
+      <div className="mb-2">
+        {loading ? "Fetching weather…" : summary || "No weather data."}
+      </div>
       <button
         type="button"
         className="underline text-foreground/80 hover:text-foreground"
         onClick={async () => {
-          setOpen((v) => !v)
-          const next = !open
-          if (next && raw === null && typeof lat === "number" && typeof lon === "number") {
+          setOpen((v) => !v);
+          const next = !open;
+          if (
+            next &&
+            raw === null &&
+            typeof lat === "number" &&
+            typeof lon === "number"
+          ) {
             try {
-              const today = new Date()
-              const dateParam = today.toISOString().slice(0, 10)
-              const url = `https://api.brightsky.dev/weather?date=${dateParam}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`
-              const res = await fetch(url)
-              const json: unknown = res.ok ? await res.json() : { error: `HTTP ${res.status}` }
-              setRaw(json)
+              const today = new Date();
+              const dateParam = today.toISOString().slice(0, 10);
+              const url = `https://api.brightsky.dev/weather?date=${dateParam}&lat=${lat}&lon=${lon}&tz=UTC&units=dwd`;
+              const res = await fetch(url);
+              const json: unknown = res.ok
+                ? await res.json()
+                : { error: `HTTP ${res.status}` };
+              setRaw(json);
             } catch {
-              setRaw({ error: "fetch failed" })
+              setRaw({ error: "fetch failed" });
             }
           }
         }}
@@ -83,5 +108,5 @@ export default function Weather({ lat, lon }: { lat?: number | null; lon?: numbe
         </pre>
       )}
     </div>
-  )
+  );
 }
