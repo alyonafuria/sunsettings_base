@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, type Address, type Abi } from "viem";
+import { createPublicClient, http, type Address } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
 function ipfsToHttp(uri: string): string {
