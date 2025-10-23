@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, type Address } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
+// Simple in-memory cache (per server instance)
+const CACHE_TTL_MS = 60_000; // 60s
+const CACHE = new Map<string, { expiry: number; payload: unknown }>();
+
+function getCache(key: string) {
+  const entry = CACHE.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    CACHE.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+function setCache(key: string, payload: unknown, ttlMs = CACHE_TTL_MS) {
+  CACHE.set(key, { payload, expiry: Date.now() + ttlMs });
+}
+
+async function mapWithConcurrency<T, U>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<U>
+): Promise<U[]> {
+  const results: U[] = new Array(items.length) as U[];
+  let next = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function ipfsToHttp(uri: string): string {
   if (!uri) return "";
   return uri.startsWith("ipfs://")
@@ -43,6 +77,13 @@ export async function GET(req: NextRequest) {
     sort: "desc",
   });
   if (apiKey) v2Params.set("apikey", apiKey);
+
+  // Check cache first (cache includes API-key-independent response shape)
+  const cacheKey = `wallet-nfts:${address}:${chainId}:${contract || "auto"}`;
+  const cached = getCache(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
 
   // Try Etherscan V2
   type TokenTx = {
@@ -142,29 +183,67 @@ export async function GET(req: NextRequest) {
     },
   ] as const;
 
-  const items: { image: string; time?: number }[] = [];
-  for (const id of tokenIds) {
+  // Batch tokenURI reads using multicall
+  let uris: (string | null)[] = [];
+  if (tokenIds.length > 0) {
     try {
-      const uri = await client.readContract({
+      const calls = tokenIds.map((id) => ({
         address: contractAddress as Address,
         abi,
-        functionName: "tokenURI",
+        functionName: "tokenURI" as const,
         args: [BigInt(id)],
-      });
-      const metaUrl = ipfsToHttp(String(uri));
-      const metaRes = await fetch(metaUrl, { next: { revalidate: 60 } });
-      const meta = (await metaRes.json().catch(() => null)) as unknown;
-      const getImage = (m: unknown): string => {
-        if (m && typeof m === "object") {
-          const r = m as Record<string, unknown>;
-          if (typeof r.image === "string") return r.image;
+      }));
+      const res = await client.multicall({ contracts: calls, allowFailure: true });
+      uris = res.map((r) => (r.status === "success" ? String(r.result as string) : null));
+    } catch {
+      // fallback: try sequentially but avoid throwing
+      uris = [];
+      for (const id of tokenIds) {
+        try {
+          const uri = await client.readContract({
+            address: contractAddress as Address,
+            abi,
+            functionName: "tokenURI",
+            args: [BigInt(id)],
+          });
+          uris.push(String(uri));
+        } catch {
+          uris.push(null);
         }
-        return "";
-      };
-      const img = ipfsToHttp(getImage(meta));
-      if (img) items.push({ image: img, time: tokenIdToTime[id] });
-    } catch {}
+      }
+    }
   }
 
-  return NextResponse.json({ items, count: items.length });
+  // Fetch metadata with limited concurrency
+  const items: { image: string; time?: number }[] = [];
+  const metas = await mapWithConcurrency(
+    uris.map((u, i) => ({ uri: u, i })),
+    6,
+    async ({ uri, i }) => {
+      if (!uri) return { i, img: "" } as const;
+      const metaUrl = ipfsToHttp(String(uri));
+      try {
+        const metaRes = await fetch(metaUrl, { next: { revalidate: 300 } });
+        const meta = (await metaRes.json().catch(() => null)) as unknown;
+        const getImage = (m: unknown): string => {
+          if (m && typeof m === "object") {
+            const r = m as Record<string, unknown>;
+            if (typeof r.image === "string") return r.image;
+          }
+          return "";
+        };
+        const img = ipfsToHttp(getImage(meta));
+        return { i, img } as const;
+      } catch {
+        return { i, img: "" } as const;
+      }
+    }
+  );
+  metas.forEach(({ i, img }) => {
+    const id = tokenIds[i];
+    if (img) items.push({ image: img, time: tokenIdToTime[id] });
+  });
+  const payload = { items, count: items.length };
+  setCache(cacheKey, payload);
+  return NextResponse.json(payload);
 }
