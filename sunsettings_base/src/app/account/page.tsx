@@ -173,7 +173,8 @@ export default function AccountPage() {
           loading={!isConnected || isConnecting}
           avatarUrl={basenameAvatar ?? null}
           wallet={address ?? null}
-          title={basename || "sunset catcher"}
+          displayName={basename ?? null}
+          title={"sunset catcher"}
           postTimes={items
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}

@@ -91,6 +91,27 @@ export default function UploadPhotoPanel({
   const [gpsError, setGpsError] = React.useState<string | null>(null);
   const [geoLoading, setGeoLoading] = React.useState(false);
   const [geoError, setGeoError] = React.useState<string | null>(null);
+  const geoLockRef = React.useRef(false);
+  const [geoDenied, setGeoDenied] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return sessionStorage.getItem("geo_denied") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const getGeoPermissionState = React.useCallback(async (): Promise<"granted" | "denied" | "prompt" | "unknown"> => {
+    try {
+      const anyNav: any = navigator as any;
+      if (!anyNav?.permissions?.query) return "unknown";
+      const res = await anyNav.permissions.query({ name: "geolocation" as PermissionName });
+      const s = (res?.state ?? "unknown") as string;
+      if (s === "granted" || s === "denied" || s === "prompt") return s as any;
+      return "unknown";
+    } catch {
+      return "unknown";
+    }
+  }, []);
   const [deviceId, setDeviceId] = React.useState<string | null>(null);
   const [captureTimestamp, setCaptureTimestamp] = React.useState<string | null>(
     null
@@ -205,11 +226,18 @@ export default function UploadPhotoPanel({
 
   async function detectLocation() {
     if (gpsFix) return;
+    if (geoLockRef.current) return;
+    geoLockRef.current = true;
     setGpsError(null);
     setGpsFixing(true);
     try {
       if (!("geolocation" in navigator))
         throw new Error("Geolocation not available");
+      const state = await getGeoPermissionState();
+      if (state === "denied" || geoDenied) {
+        setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+        return;
+      }
       const pos: GeolocationPosition = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
@@ -277,10 +305,17 @@ export default function UploadPhotoPanel({
         setPhotoLocationLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
       }
     } catch (e) {
-      setGpsError((e as Error)?.message || "Location failed");
+      const msg = (e as GeolocationPositionError)?.message || (e as Error)?.message || "Location failed";
+      setGpsError(msg);
+      const code = (e as any)?.code;
+      if (code === 1 || /denied/i.test(String(msg))) {
+        try { sessionStorage.setItem("geo_denied", "1"); } catch {}
+        setGeoDenied(true);
+      }
       setGpsFix(null);
     } finally {
       setGpsFixing(false);
+      geoLockRef.current = false;
     }
   }
 
@@ -471,6 +506,15 @@ export default function UploadPhotoPanel({
                           setGeoError("Geolocation not available");
                           return;
                         }
+                        // Permissions preflight and session guard
+                        try {
+                          const state = await getGeoPermissionState();
+                          const denied = state === "denied" || geoDenied;
+                          if (denied) {
+                            setGeoError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+                            return;
+                          }
+                        } catch {}
                         setGeoLoading(true);
                         try {
                           const pos = await new Promise<GeolocationPosition>(
@@ -541,10 +585,13 @@ export default function UploadPhotoPanel({
                             setLabelLoading(false);
                           }
                         } catch (e) {
-                          setGeoError(
-                            (e as GeolocationPositionError)?.message ||
-                              "Failed to get location"
-                          );
+                          const msg = (e as GeolocationPositionError)?.message || "Failed to get location";
+                          setGeoError(msg);
+                          const code = (e as any)?.code;
+                          if (code === 1 || /denied/i.test(String(msg))) {
+                            try { sessionStorage.setItem("geo_denied", "1"); } catch {}
+                            setGeoDenied(true);
+                          }
                         } finally {
                           setGeoLoading(false);
                         }
