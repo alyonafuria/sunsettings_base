@@ -70,12 +70,34 @@ export function useLocationCombobox({
     if (!("geolocation" in navigator)) {
       return
     }
+    // Session guard: if user denied earlier in this session, do not prompt again
+    try {
+      if (typeof window !== "undefined" && sessionStorage.getItem("geo_denied") === "1") {
+        setError("Location permission is blocked. Enable it in Settings and try again.")
+        return
+      }
+    } catch {}
     setDetectLoading(true)
     setError(null)
     const controller = new AbortController()
     // Allow more time for reverse geocoding to respond over the network
     const t = setTimeout(() => controller.abort(), 12000)
-    navigator.geolocation.getCurrentPosition(
+    // Permissions API preflight (best-effort)
+    const preflight = async () => {
+      try {
+        const perm = await navigator.permissions?.query?.({ name: "geolocation" as PermissionName })
+        if (perm && perm.state === "denied") {
+          setError("Location permission is blocked. Enable it in Settings and try again.")
+          setDetectLoading(false)
+          try { sessionStorage.setItem("geo_denied", "1") } catch {}
+          return false
+        }
+      } catch {}
+      return true
+    }
+    preflight().then((ok) => {
+      if (!ok) return
+      navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords
@@ -107,12 +129,21 @@ export function useLocationCombobox({
         }
       },
       (err) => {
-        setError(err.message || "Location permission denied")
+        const msg = err?.message || "Location permission denied"
+        setError(msg)
+        // If explicitly denied, remember for the session to avoid repeated prompts
+        try {
+          // GeolocationPositionError.PERMISSION_DENIED === 1
+          if ((err as any)?.code === 1 || /denied/i.test(String(msg))) {
+            sessionStorage.setItem("geo_denied", "1")
+          }
+        } catch {}
         setDetectLoading(false)
       },
       // Give the browser more time to resolve the current position
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 30 * 60 * 1000 },
     )
+    })
   }, [onChange, onDetectedCoords])
 
   const selected =
