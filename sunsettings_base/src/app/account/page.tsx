@@ -171,9 +171,9 @@ export default function AccountPage() {
       <div className="shrink-0">
         <AccountInfo
           loading={!isConnected || isConnecting}
-          avatarUrl={basenameAvatar}
-          wallet={(basename as string | null) ?? (address ?? null)}
-          title={(basename as string | null) ?? (address ?? null)}
+          avatarUrl={basenameAvatar ?? null}
+          wallet={address ?? null}
+          title={basename || "sunset catcher"}
           postTimes={items
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}
