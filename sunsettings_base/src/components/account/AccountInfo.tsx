@@ -35,31 +35,27 @@ export default function AccountInfo({
 
   // no connect button in header when not connected; keep helper for potential future use
 
-  // Compute yearly level (unique days with posts in the current year)
+  // Compute yearly level (unique local calendar days with at least one post in the current year)
   const yearlyLevel = React.useMemo(() => {
-    const toKeyUTC = (d: Date) => d.toISOString().slice(0, 10);
-    const set = new Set<string>();
-    (postTimes || []).forEach((ts) => {
-      const d = new Date(ts * 1000);
-      set.add(
-        toKeyUTC(
-          new Date(
-            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-          )
-        )
-      );
-    });
+    const toKeyLocal = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
     const now = new Date();
-    const year = now.getUTCFullYear();
-    const jan1 = new Date(Date.UTC(year, 0, 1));
-    const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
-    const yearDays = isLeap ? 366 : 365;
-    let count = 0;
-    for (let i = 0; i < yearDays; i++) {
-      const d = new Date(jan1.getTime() + i * 86_400_000);
-      if (set.has(toKeyUTC(d))) count++;
+    const year = now.getFullYear();
+
+    // Build a set of unique local-date keys limited to this year
+    const set = new Set<string>();
+    for (const ts of postTimes || []) {
+      const d = new Date(ts * 1000);
+      if (d.getFullYear() === year) {
+        set.add(toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate())));
+      }
     }
-    return count;
+    return set.size;
   }, [postTimes]);
 
   return (
@@ -148,73 +144,100 @@ function YearlySunsetStats({
   loading: boolean;
   postTimes?: number[];
 }) {
-  // Build a set of local-date keys (YYYY-MM-DD) for posts
-  const toKey = (d: Date) => d.toISOString().slice(0, 10);
-  const postSet = React.useMemo(() => {
-    const s = new Set<string>();
-    (postTimes || []).forEach((ts) => {
-      const d = new Date(ts * 1000);
-      // Normalize to UTC date key for consistency
-      s.add(
-        toKey(
-          new Date(
-            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-          )
-        )
-      );
-    });
-    return s;
-  }, [postTimes]);
+  // Helpers for local-calendar arithmetic and keys
+  const toKeyLocal = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const addDaysLocal = (d: Date, days: number) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 
+  // Build a set of local-date keys (YYYY-MM-DD) for posts, limited to current year where relevant
   const now = React.useMemo(() => new Date(), []);
-  const year = now.getUTCFullYear();
-  const jan1 = React.useMemo(() => new Date(Date.UTC(year, 0, 1)), [year]);
-  const todayUTC = React.useMemo(
-    () => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+  const year = now.getFullYear();
+  const jan1 = React.useMemo(() => new Date(year, 0, 1), [year]);
+  const dec31 = React.useMemo(() => new Date(year, 11, 31), [year]);
+  const todayLocal = React.useMemo(
+    () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     [now]
   );
-  const isLeap = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+
+  const postSet = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const ts of postTimes || []) {
+      const d = new Date(ts * 1000);
+      // Normalize to local calendar day key
+      s.add(toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate())));
+    }
+    return s;
+  }, [postTimes]);
+  const isLeap = new Date(year, 1, 29).getMonth() === 1;
   const yearDays = isLeap ? 366 : 365;
-  // Count unique posting days for the entire calendar year
-  let countYear = 0;
-  for (let i = 0; i < yearDays; i++) {
-    const d = new Date(jan1.getTime() + i * 86_400_000);
-    if (postSet.has(toKey(d))) countYear++;
-  }
+  // Count unique posting days for the entire calendar year using local dates
+  const countYear = React.useMemo(() => {
+    let count = 0;
+    for (let i = 0; i < yearDays; i++) {
+      const d = new Date(year, 0, 1 + i);
+      if (d > dec31) break;
+      if (postSet.has(toKeyLocal(d))) count++;
+    }
+    return count;
+  }, [postSet, yearDays, dec31, year]);
 
   // Compute longest and current streaks (within current year, up to today)
   const { longestStreak, currentStreak } = React.useMemo(() => {
+    // Longest streak within current year (local)
     let longest = 0;
-    let current = 0;
-    // iterate from Jan 1 to today (inclusive)
+    let rolling = 0;
     const daysToToday = Math.floor(
-      (todayUTC.getTime() - jan1.getTime()) / 86_400_000
+      (todayLocal.getTime() - jan1.getTime()) / 86_400_000
     );
     for (let i = 0; i <= daysToToday; i++) {
-      const d = new Date(jan1.getTime() + i * 86_400_000);
-      const key = toKey(d);
+      const d = new Date(year, 0, 1 + i);
+      const key = toKeyLocal(d);
       if (postSet.has(key)) {
-        current += 1;
-        if (current > longest) longest = current;
+        rolling += 1;
+        if (rolling > longest) longest = rolling;
       } else {
-        current = 0;
+        rolling = 0;
       }
     }
-    return { longestStreak: longest, currentStreak: current };
-  }, [postSet, jan1, todayUTC]);
 
-  // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31)
+    // Current streak: count continuous local days starting from today backwards
+    let cur = 0;
+    let probe = new Date(todayLocal.getFullYear(), todayLocal.getMonth(), todayLocal.getDate());
+    while (true) {
+      const key = toKeyLocal(probe);
+      if (postSet.has(key)) {
+        cur += 1;
+        // move to previous day (local)
+        probe = new Date(probe.getFullYear(), probe.getMonth(), probe.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return { longestStreak: longest, currentStreak: cur };
+  }, [postSet, jan1, todayLocal, year]);
+
+  // Build GitHub-like weekly grid for full current year (Jan 1 to Dec 31) using local calendar
   const startWindow = jan1;
-  const dec31 = new Date(Date.UTC(year, 11, 31));
-  // Align grid to previous Sunday and next Saturday around the full year
-  const startWeekday = startWindow.getUTCDay();
-  const gridStart = new Date(startWindow.getTime() - startWeekday * 86_400_000);
-  const endWeekdayDec31 = dec31.getUTCDay();
-  const gridEnd = new Date(
-    dec31.getTime() + (6 - endWeekdayDec31) * 86_400_000
+  // Align grid to previous Sunday and next Saturday around the full year (local)
+  const startWeekday = startWindow.getDay();
+  const gridStart = new Date(
+    startWindow.getFullYear(),
+    startWindow.getMonth(),
+    startWindow.getDate() - startWeekday
   );
-  const totalDays =
-    Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
+  const endWeekdayDec31 = dec31.getDay();
+  const gridEnd = new Date(
+    dec31.getFullYear(),
+    dec31.getMonth(),
+    dec31.getDate() + (6 - endWeekdayDec31)
+  );
+  const totalDays = Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
   const weeks = Math.ceil(totalDays / 7);
 
   type Cell = {
@@ -228,11 +251,11 @@ function YearlySunsetStats({
   for (let w = 0; w < weeks; w++) {
     const col: Array<Cell> = [];
     for (let d = 0; d < 7; d++) {
-      const idx = w * 7 + d;
-      const date = new Date(gridStart.getTime() + idx * 86_400_000);
-      const key = toKey(date);
-      const inWindow = date >= startWindow && date <= dec31; // entire year range
-      const isFuture = date > todayUTC && date <= dec31;
+  const idx = w * 7 + d;
+  const date = addDaysLocal(gridStart, idx);
+  const key = toKeyLocal(date);
+  const inWindow = date >= startWindow && date <= dec31; // entire year range (local)
+  const isFuture = date > todayLocal && date <= dec31;
       const hasPost = postSet.has(key);
       col.push({ date, key, inWindow, isFuture, hasPost });
     }
@@ -261,13 +284,13 @@ function YearlySunsetStats({
     "Dec",
   ] as const;
   const getWeekMonth = (w: number) => {
-    // Use mid-week day (Wednesday) to determine month for this week
-    const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
-    return mid.getUTCMonth();
+    // Use mid-week day (Wednesday) to determine month for this week (local)
+    const mid = addDaysLocal(gridStart, w * 7 + 3);
+    return mid.getMonth();
   };
   const getWeekMonthLabel = (w: number) => {
-    const mid = new Date(gridStart.getTime() + (w * 7 + 3) * 86_400_000);
-    return MONTHS_SHORT[mid.getUTCMonth()];
+    const mid = addDaysLocal(gridStart, w * 7 + 3);
+    return MONTHS_SHORT[mid.getMonth()];
   };
   let currentMonth = getWeekMonth(0);
   let startIdx = 0;
@@ -396,11 +419,7 @@ function YearlySunsetStats({
                                   colorClass,
                                 ].join(" ")}
                                 data-key={cell.key}
-                                data-today={
-                                  cell.key === toKey(todayUTC)
-                                    ? "true"
-                                    : undefined
-                                }
+                                data-today={cell.key === toKeyLocal(todayLocal) ? "true" : undefined}
                                 aria-label={`${cell.date.toDateString()} ${
                                   cell.hasPost
                                     ? "Posted"

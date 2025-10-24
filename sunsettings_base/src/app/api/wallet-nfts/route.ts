@@ -26,12 +26,14 @@ async function mapWithConcurrency<T, U>(
 ): Promise<U[]> {
   const results: U[] = new Array(items.length) as U[];
   let next = 0;
-  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
-    while (next < items.length) {
-      const idx = next++;
-      results[idx] = await fn(items[idx], idx);
-    }
-  });
+  const workers = new Array(Math.min(limit, items.length))
+    .fill(0)
+    .map(async () => {
+      while (next < items.length) {
+        const idx = next++;
+        results[idx] = await fn(items[idx], idx);
+      }
+    });
   await Promise.all(workers);
   return results;
 }
@@ -152,7 +154,9 @@ export async function GET(req: NextRequest) {
   const tokenIds: string[] = [];
   const tokenIdToTime: Record<string, number> = {};
   for (const t of mine) {
-    const id = String((t.tokenID as unknown as string) ?? (t.tokenId as unknown as string) ?? "");
+    const id = String(
+      (t.tokenID as unknown as string) ?? (t.tokenId as unknown as string) ?? ""
+    );
     if (!id || seen.has(id)) continue;
     seen.add(id);
     tokenIds.push(id);
@@ -193,8 +197,13 @@ export async function GET(req: NextRequest) {
         functionName: "tokenURI" as const,
         args: [BigInt(id)],
       }));
-      const res = await client.multicall({ contracts: calls, allowFailure: true });
-      uris = res.map((r) => (r.status === "success" ? String(r.result as string) : null));
+      const res = await client.multicall({
+        contracts: calls,
+        allowFailure: true,
+      });
+      uris = res.map((r) =>
+        r.status === "success" ? String(r.result as string) : null
+      );
     } catch {
       // fallback: try sequentially but avoid throwing
       uris = [];
