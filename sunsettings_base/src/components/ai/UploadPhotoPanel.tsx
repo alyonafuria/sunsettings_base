@@ -5,6 +5,7 @@ import { useAccount, useConnect } from "wagmi";
 import type { Abi } from "viem";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
 import { HelpCircle } from "lucide-react";
 import {
@@ -66,9 +67,7 @@ export default function UploadPhotoPanel({
   const [metaCid, setMetaCid] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [userDecision, setUserDecision] = React.useState<"yes" | "no" | null>(
-    null
-  );
+  const [disagree, setDisagree] = React.useState(false);
   const [userScore, setUserScore] = React.useState<number | null>(null);
   const [photoH3Index, setPhotoH3Index] = React.useState<string | null>(null);
   const [photoCellCenter, setPhotoCellCenter] = React.useState<{
@@ -143,7 +142,7 @@ export default function UploadPhotoPanel({
     setFile(null);
     setPhotoCid(null);
     setMetaCid(null);
-    setUserDecision(null);
+    setDisagree(false);
     setUserScore(null);
     // ensure all derived state is reset so a future photo starts clean
     setPhotoH3Index(null);
@@ -168,6 +167,15 @@ export default function UploadPhotoPanel({
       setIsMobile(false);
     }
   }, []);
+
+  // Keep user score in sync with the checkbox
+  React.useEffect(() => {
+    if (disagree) {
+      setUserScore(null);
+    } else {
+      setUserScore(typeof scorePercent === "number" ? scorePercent : null);
+    }
+  }, [disagree, scorePercent]);
 
   React.useEffect(() => {
     try {
@@ -203,9 +211,9 @@ export default function UploadPhotoPanel({
       const url = URL.createObjectURL(f);
       setPreviewUrl(url);
       setCaptureTimestamp(new Date().toISOString());
-      // default: wait for user decision; reset prior choices
-      setUserDecision(null);
-      setUserScore(null);
+      // default: agree with the score; reset checkbox and set initial userScore
+      setDisagree(false);
+      setUserScore(typeof scorePercent === "number" ? scorePercent : null);
       // compute prehash and set takenAt from captureTimestamp or file's lastModified; do NOT clear pre-captured location
       (async () => {
         // Compute prehash immediately using file bytes + gps fix + capture timestamp
@@ -240,7 +248,7 @@ export default function UploadPhotoPanel({
     } else {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
-      setUserDecision(null);
+      setDisagree(false);
       setUserScore(null);
     }
   }
@@ -608,33 +616,17 @@ export default function UploadPhotoPanel({
                     You need to sign up / log in to submit a photo.
                   </div>
                 )}
-                <div className="text-sm">Agree with the score?</div>
-                <div className="flex justify-center gap-2">
-                  <Button
-                    type="button"
-                    variant={userDecision === "yes" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("yes");
-                      setUserScore(scorePercent ?? null);
-                    }}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">Disagree with the score?</div>
+                  <Switch
+                    aria-label="Disagree with the score"
+                    checked={disagree}
+                    onCheckedChange={(v) => setDisagree(v)}
                     disabled={uploading}
-                  >
-                    <span>Yes</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={userDecision === "no" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("no");
-                      setUserScore(null);
-                    }}
-                    disabled={uploading}
-                  >
-                    <span>No</span>
-                  </Button>
+                  />
                 </div>
 
-                {userDecision === "no" && (
+                {disagree && (
                   <div className="pt-1">
                     <div className="text-xs mb-1 opacity-80">
                       Adjust your score
@@ -924,10 +916,10 @@ export default function UploadPhotoPanel({
         } catch {}
       }
       // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
-      setPreviewUrl(null);
-      setFile(null);
-      setUserDecision(null);
-      setUserScore(null);
+  setPreviewUrl(null);
+  setFile(null);
+  setDisagree(false);
+  setUserScore(null);
     } catch (e) {
       setError((e as Error)?.message || "Upload failed");
     } finally {
