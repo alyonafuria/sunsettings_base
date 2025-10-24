@@ -45,6 +45,17 @@ export function LocationComboboxContent({
     return () => cancelAnimationFrame(id)
   }, [])
   const hasQuery = search.trim().length > 0
+  // Auto-detect once when opened with no current value and geolocation available
+  React.useEffect(() => {
+    try {
+      const autoDone = typeof window !== 'undefined' ? sessionStorage.getItem('geo_autorun_done') === '1' : false
+      if (!autoDone && typeof navigator !== 'undefined' && 'geolocation' in navigator && !currentValue && !hasQuery && !detectLoading && !error) {
+        runDetection()
+        try { sessionStorage.setItem('geo_autorun_done', '1') } catch {}
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentValue, hasQuery, detectLoading, error])
   return (
     <Command>
       <CommandInput
