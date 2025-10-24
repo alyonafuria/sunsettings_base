@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
+import { Button } from "@/components/ui/button";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
@@ -19,18 +20,16 @@ export default function AccountPage() {
   const inMiniApp = useMiniAppContext();
   const isMini = inMiniApp === true;
 
-  // Avatar URL is currently unused; AccountInfo renders a generated avatar when absent
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
-  const refetchingRef = React.useRef(false);
+  const [loadingItems, setLoadingItems] = React.useState(false);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    if (refetchingRef.current) return;
-    refetchingRef.current = true;
+    setLoadingItems(true);
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
@@ -55,7 +54,7 @@ export default function AccountPage() {
     } catch {
       setItems([]);
     } finally {
-      refetchingRef.current = false;
+      setLoadingItems(false);
     }
   }, [isConnected, address, chainId]);
 
@@ -131,7 +130,7 @@ export default function AccountPage() {
       {/* Top section: content-sized for mobile to avoid overlap */}
       <div className="shrink-0">
         <AccountInfo
-          loading={!isConnected || isConnecting}
+          loading={isConnecting || loadingItems}
           avatarUrl={null}
           wallet={address ?? null}
           title={"sunset catcher"}
@@ -139,12 +138,13 @@ export default function AccountPage() {
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}
         />
+        {/* Removed Refresh link per request */}
       </div>
 
       {/* Bottom gallery or connect CTA */}
       <div className="flex-1 min-h-0">
         {isConnected ? (
-          <Gallery items={items.map((it) => it.image)} />
+          <Gallery loading={loadingItems} items={items.map((it) => it.image)} />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>

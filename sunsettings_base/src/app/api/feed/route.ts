@@ -2,6 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, type Address, type Abi } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
+// In-memory cache for feed pages
+const FEED_CACHE_TTL_MS = 60_000; // 60s
+const FEED_CACHE = new Map<string, { expiry: number; payload: unknown }>();
+const getFeedCache = (key: string) => {
+  const e = FEED_CACHE.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expiry) {
+    FEED_CACHE.delete(key);
+    return null;
+  }
+  return e.payload;
+};
+const setFeedCache = (
+  key: string,
+  payload: unknown,
+  ttlMs = FEED_CACHE_TTL_MS
+) => {
+  FEED_CACHE.set(key, { expiry: Date.now() + ttlMs, payload });
+};
+
+async function mapWithConcurrency<T, U>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<U>
+): Promise<U[]> {
+  const results: U[] = new Array(items.length) as U[];
+  let next = 0;
+  const workers = new Array(Math.min(limit, items.length))
+    .fill(0)
+    .map(async () => {
+      while (next < items.length) {
+        const idx = next++;
+        results[idx] = await fn(items[idx], idx);
+      }
+    });
+  await Promise.all(workers);
+  return results;
+}
+
 function ipfsToHttp(uri: string): string {
   if (!uri) return "";
   return uri.startsWith("ipfs://")
@@ -20,6 +59,14 @@ export async function GET(req: NextRequest) {
   const apiKey =
     process.env.ETHERSCAN_API_KEY || process.env.BASESCAN_API_KEY || "";
   const requestedChainId = Number(chainIdParam || 8453);
+
+  const cacheKey = `feed:${requestedChainId}:${
+    contract || "auto"
+  }:${exclude}:${page}:${offset}`;
+  const cached = getFeedCache(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
 
   const TRANSFER_SIG =
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -183,7 +230,7 @@ export async function GET(req: NextRequest) {
   }
   const isBaseMainnet = chosenChainId === 8453;
 
-  // Resolve tokenURI -> image
+  // Resolve tokenURI -> image via multicall
   const rpcUrl = isBaseMainnet
     ? process.env.BASE_RPC_URL
     : process.env.BASE_SEPOLIA_RPC_URL;
@@ -212,70 +259,101 @@ export async function GET(req: NextRequest) {
     time: number;
     locationLabel?: string;
   }[] = [];
-  for (const e of entries) {
+
+  if (entries.length > 0 && chosenContract) {
     try {
-      const uri = await client.readContract({
+      const calls = entries.map((e) => ({
         address: chosenContract as Address,
         abi,
-        functionName: "tokenURI",
+        functionName: "tokenURI" as const,
         args: [BigInt(e.tokenId)],
+      }));
+      const res = await client.multicall({
+        contracts: calls,
+        allowFailure: true,
       });
-      const metaUrl = ipfsToHttp(String(uri));
-      const metaRes = await fetch(metaUrl, { next: { revalidate: 60 } });
-      const meta = await metaRes.json();
-      const img = ipfsToHttp(String(meta?.image || ""));
-      // Attempt to resolve a human-friendly location label from metadata
-      let locationLabel: string | undefined;
-      type MetaAttr = {
-        trait_type?: string;
-        traitType?: string;
-        key?: string;
-        value?: unknown;
-        display_value?: unknown;
-      };
-      const attrs: MetaAttr[] = Array.isArray(meta?.attributes)
-        ? (meta.attributes as MetaAttr[])
-        : [];
-      const fromAttributes = attrs.find((a: MetaAttr) => {
-        const key = String(
-          a?.trait_type || a?.traitType || a?.key || ""
-        ).toLowerCase();
-        return /location|place|city|neighborhood|area/.test(key);
-      });
-      if (
-        fromAttributes &&
-        (fromAttributes.value || fromAttributes?.display_value)
-      ) {
-        locationLabel = String(
-          fromAttributes.value ?? fromAttributes.display_value ?? ""
-        );
+      // Fetch metadata with limited concurrency
+      const metaInputs = res.map((r, i) => ({
+        uri: r.status === "success" ? String(r.result as string) : null,
+        entry: entries[i],
+      }));
+      const metaResults = await mapWithConcurrency(
+        metaInputs,
+        6,
+        async ({ uri, entry }) => {
+          if (!uri)
+            return {
+              entry,
+              img: "",
+              locationLabel: undefined as string | undefined,
+            };
+          const metaUrl = ipfsToHttp(uri);
+          try {
+            const metaRes = await fetch(metaUrl, { next: { revalidate: 300 } });
+            const meta = await metaRes.json();
+            const img = ipfsToHttp(String(meta?.image || ""));
+            // Attempt to resolve a human-friendly location label from metadata
+            let locationLabel: string | undefined;
+            type MetaAttr = {
+              trait_type?: string;
+              traitType?: string;
+              key?: string;
+              value?: unknown;
+              display_value?: unknown;
+            };
+            const attrs: MetaAttr[] = Array.isArray(meta?.attributes)
+              ? (meta.attributes as MetaAttr[])
+              : [];
+            const fromAttributes = attrs.find((a: MetaAttr) => {
+              const key = String(
+                a?.trait_type || a?.traitType || a?.key || ""
+              ).toLowerCase();
+              return /location|place|city|neighborhood|area/.test(key);
+            });
+            if (
+              fromAttributes &&
+              (fromAttributes.value || fromAttributes?.display_value)
+            ) {
+              locationLabel = String(
+                fromAttributes.value ?? fromAttributes.display_value ?? ""
+              );
+            }
+            locationLabel =
+              String(
+                meta?.location_label ||
+                  meta?.locationLabel ||
+                  meta?.location ||
+                  meta?.properties?.location ||
+                  locationLabel ||
+                  ""
+              ) || undefined;
+            return { entry, img, locationLabel };
+          } catch {
+            return { entry, img: "", locationLabel: undefined };
+          }
+        }
+      );
+      for (const r of metaResults) {
+        if (r.img) {
+          items.push({
+            id: r.entry.tokenId,
+            image: r.img,
+            author: r.entry.to,
+            time: r.entry.time,
+            locationLabel: r.locationLabel,
+          });
+        }
       }
-      locationLabel =
-        String(
-          meta?.location_label ||
-            meta?.locationLabel ||
-            meta?.location ||
-            meta?.properties?.location ||
-            locationLabel ||
-            ""
-        ) || undefined;
-
-      if (img)
-        items.push({
-          id: e.tokenId,
-          image: img,
-          author: e.to,
-          time: e.time,
-          locationLabel,
-        });
     } catch {}
   }
 
   // Items in this page; caller can increment page to get more
-  return NextResponse.json({
+  const payload = {
     items,
     page,
     count: items.length,
     hasMore: items.length === offset, // heuristic
-  });
+  };
+  setFeedCache(cacheKey, payload);
+  return NextResponse.json(payload);
 }

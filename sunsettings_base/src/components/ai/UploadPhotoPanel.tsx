@@ -6,7 +6,7 @@ import type { Abi } from "viem";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import Image from "next/image";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, X } from "lucide-react";
 import {
   Transaction,
   TransactionButton,
@@ -398,7 +398,7 @@ export default function UploadPhotoPanel({
       <div className="mx-auto flex flex-col items-center gap-3">
         <figure className="w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
           <div className="relative">
-            <div className="relative w-full aspect-[4/3]">
+            <div className="relative w-full aspect-4/3">
               <Image
                 src={imageSrc}
                 alt={photoCid ? "uploaded" : "preview"}
@@ -408,6 +408,15 @@ export default function UploadPhotoPanel({
                 unoptimized={unoptimized}
               />
             </div>
+            {/* Close button (replaces Cancel), top-right over the photo */}
+            <button
+              type="button"
+              onClick={closePanel}
+              className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
+              aria-label="Close photo"
+            >
+              <X className="w-6 h-6 md:w-6 md:h-6" />
+            </button>
             {displayLabel &&
               (hasExif ? (
                 <div className="absolute top-2 left-2 text-[11px] px-2 py-1 bg-white text-black border-2 border-black">
@@ -716,7 +725,7 @@ export default function UploadPhotoPanel({
                           : false)
                       }
                     >
-                      {uploading ? "Submitting…" : "Submit"}
+                      {uploading ? "Posting…" : "Post"}
                     </Button>
                   ) : (
                     <Button
@@ -727,15 +736,6 @@ export default function UploadPhotoPanel({
                       {connectStatus === "pending"
                         ? "Connecting…"
                         : "Sign up / Log in"}
-                    </Button>
-                  )}
-                  {!uploading && (
-                    <Button
-                      type="button"
-                      variant="neutral"
-                      onClick={closePanel}
-                    >
-                      Cancel
                     </Button>
                   )}
                 </div>

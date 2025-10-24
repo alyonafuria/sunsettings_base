@@ -159,10 +159,24 @@ export default function Feed() {
       }
     };
 
-    authorsToFetch.forEach((addr) => {
-      requestedAuthorsRef.current.add(addr);
-      fetchLevel(addr);
-    });
+    // Mark as requested to avoid duplicates during concurrent processing
+    authorsToFetch.forEach((addr) => requestedAuthorsRef.current.add(addr));
+
+    // Limit concurrency to avoid bursts of network requests
+    (async () => {
+      const concurrency = 4;
+      let next = 0;
+      const workers = new Array(Math.min(concurrency, authorsToFetch.length))
+        .fill(0)
+        .map(async () => {
+          while (next < authorsToFetch.length) {
+            const idx = next++;
+            const addr = authorsToFetch[idx];
+            await fetchLevel(addr);
+          }
+        });
+      await Promise.all(workers);
+    })();
   }, [items, chainId]);
 
   // infinite scroll via intersection observer
