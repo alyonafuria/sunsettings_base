@@ -2,9 +2,12 @@
 
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
-import { Button } from "@/components/ui/button";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
+import { getBasename, getBasenameAvatar } from "@/apis/basenames";
+import type { Basename } from "@/apis/basenames";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
@@ -15,17 +18,22 @@ export default function AccountPage() {
     error: connectError,
   } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
+  const inMiniApp = useMiniAppContext();
+  const isMini = inMiniApp === true;
 
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
-  const [loadingItems, setLoadingItems] = React.useState(false);
+  const refetchingRef = React.useRef(false);
+  const [basename, setBasename] = React.useState<string | null>(null);
+  const [basenameAvatar, setBasenameAvatar] = React.useState<string | null>(null);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    setLoadingItems(true);
+    if (refetchingRef.current) return;
+    refetchingRef.current = true;
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
@@ -50,7 +58,7 @@ export default function AccountPage() {
     } catch {
       setItems([]);
     } finally {
-      setLoadingItems(false);
+      refetchingRef.current = false;
     }
   }, [isConnected, address, chainId]);
 
@@ -79,6 +87,40 @@ export default function AccountPage() {
     };
   }, [refetch]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isConnected || !address) {
+          setBasename(null);
+          setBasenameAvatar(null);
+          return;
+        }
+        const name = await getBasename(address);
+        if (!cancelled) {
+          const validName: Basename | null = typeof name === 'string' && name.length ? (name as Basename) : null;
+          setBasename(validName);
+          if (validName) {
+            try {
+              const av = await getBasenameAvatar(validName);
+              if (!cancelled) setBasenameAvatar(typeof av === 'string' && av.length ? av : null);
+            } catch {
+              if (!cancelled) setBasenameAvatar(null);
+            }
+          } else {
+            setBasenameAvatar(null);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setBasename(null);
+          setBasenameAvatar(null);
+        }
+      }
+    })();
+    return () => { cancelled = true };
+  }, [isConnected, address]);
+
   const connectCoinbase = async () => {
     try {
       // Prefer coinbaseWallet connector
@@ -87,14 +129,51 @@ export default function AccountPage() {
     } catch {}
   };
 
+  const [authPending, setAuthPending] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
+  const [fcAuthed, setFcAuthed] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return sessionStorage.getItem('fc_authed') === '1'; } catch { return false; }
+  });
+  const signInFarcaster = async () => {
+    setAuthError(null);
+    setAuthPending(true);
+    try {
+      const bytes = new Uint8Array(16);
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      const nonce = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join("");
+      type MiniAppSdk = { actions?: { signIn?: (args: { nonce: string }) => Promise<unknown> } };
+      const maybe = (sdk as unknown as MiniAppSdk);
+      if (!maybe?.actions?.signIn) {
+        throw new Error('Farcaster signIn is unavailable in this context');
+      }
+      const res = await maybe.actions.signIn({ nonce });
+      // Log for debugging; UI remains on the same page
+      console.log('Farcaster signIn result:', res);
+      setFcAuthed(true);
+      try { sessionStorage.setItem('fc_authed', '1'); } catch {}
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sign-in failed';
+      console.warn('Farcaster signIn error:', e);
+      setAuthError(msg);
+    } finally {
+      setAuthPending(false);
+    }
+  };
+
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Top section: content-sized for mobile to avoid overlap */}
       <div className="shrink-0">
         <AccountInfo
-          loading={isConnecting || loadingItems}
-          avatarUrl={null}
+          loading={!isConnected || isConnecting}
+          avatarUrl={basenameAvatar ?? null}
           wallet={address ?? null}
+          displayName={basename ?? null}
           title={"sunset catcher"}
           postTimes={items
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
@@ -106,24 +185,42 @@ export default function AccountPage() {
       {/* Bottom gallery or connect CTA */}
       <div className="flex-1 min-h-0">
         {isConnected ? (
-          <Gallery loading={loadingItems} items={items.map((it) => it.image)} />
+          <Gallery items={items.map((it) => it.image)} />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={connectCoinbase}
-                disabled={connectStatus === "pending"}
-              >
-                {connectStatus === "pending"
-                  ? "Connecting…"
-                  : "Sign up / Log in"}
-              </Button>
-              <div className="mt-2 text-sm">to start catching sunsets</div>
+              <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
+              {isMini ? (
+                fcAuthed ? (
+                  <div className="text-sm">Signed in with Farcaster</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={signInFarcaster}
+                    className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90 disabled:opacity-50"
+                    disabled={authPending}
+                  >
+                    {authPending ? 'Signing in…' : 'Sign in with Farcaster'}
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={connectCoinbase}
+                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
+                  disabled={connectStatus === 'pending'}
+                >
+                  {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
+                </button>
+              )}
               {connectError ? (
                 <div className="mt-2 text-xs text-red-600">
                   {String(connectError.message || "Connection failed")}
+                </div>
+              ) : null}
+              {authError ? (
+                <div className="mt-2 text-xs text-red-600">
+                  {authError}
                 </div>
               ) : null}
             </div>

@@ -13,12 +13,14 @@ export default function AccountInfo({
   avatarUrl,
   wallet,
   title,
+  displayName,
   postTimes,
 }: {
   loading: boolean;
   avatarUrl?: string | null;
   wallet?: string | null;
   title?: string | null;
+  displayName?: string | null;
   postTimes?: number[]; // unix seconds of posts (NFT mints)
 }) {
   const { address, isConnected } = useAccount();
@@ -92,7 +94,7 @@ export default function AccountInfo({
                 <Skeleton className="h-4 w-1/3" />
               ) : (
                 <div className="text-base font-semibold truncate">
-                  {getRomanticNameForAddress(wallet ?? address ?? null)}
+                  {displayName ?? getRomanticNameForAddress(wallet ?? address ?? null)}
                 </div>
               )}
 

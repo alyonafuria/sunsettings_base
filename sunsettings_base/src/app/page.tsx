@@ -1,6 +1,41 @@
 import HomeHeroSection from "@/components/HomeHeroSection";
 import PrewarmPhotos from "@/components/PrewarmPhotos";
 
+export async function generateMetadata() {
+  const embed = {
+    version: "1",
+    imageUrl: "https://catch.sunsettings.app/embed.png",
+    button: {
+      title: "sunsettings",
+      action: {
+        type: "launch_frame",
+        name: "sunsettings",
+        url: "https://catch.sunsettings.app",
+        splashImageUrl: "https://catch.sunsettings.app/icon.png",
+        splashBackgroundColor: "#009bfa",
+      },
+    },
+  } as const;
+  const serialized = JSON.stringify(embed);
+  return {
+    other: {
+      "fc:miniapp": serialized,
+      "fc:frame": serialized,
+    },
+    openGraph: {
+      title: "sunsettings",
+      description: "Capture and share beautiful sunsets",
+      images: [
+        {
+          url: "https://catch.sunsettings.app/embed.png",
+          width: 1200,
+          height: 800,
+        },
+      ],
+    },
+  };
+}
+
 export default function Home() {
   return (
     <div className="relative top-0 h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
