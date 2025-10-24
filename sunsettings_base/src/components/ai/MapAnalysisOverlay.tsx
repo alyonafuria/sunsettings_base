@@ -8,6 +8,7 @@ import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel"
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -66,7 +67,11 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   React.useEffect(() => {
     // Prefer explicit URL coordinates if provided, fallback to cached label
     if (latStr && lonStr) {
-      setLocationLabel(`${latStr}, ${lonStr}`)
+      const ln = Number(latStr)
+      const lo = Number(lonStr)
+      const latFmt = Number.isFinite(ln) ? ln.toFixed(3) : latStr
+      const lonFmt = Number.isFinite(lo) ? lo.toFixed(3) : lonStr
+      setLocationLabel(`${latFmt}, ${lonFmt}`)
     } else {
       const cached = buildLocationLabelFromCache()
       setLocationLabel(cached || "")
@@ -90,7 +95,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
         if (cancelled) return
         const label = (data && typeof data.label === 'string' && data.label.trim().length)
           ? data.label
-          : `${latNum}, ${lonNum}`
+          : `${latNum.toFixed(3)}, ${lonNum.toFixed(3)}`
         setLocationLabel(label)
         try { localStorage.setItem('locationCache', JSON.stringify({ label })) } catch {}
       } catch {}
@@ -197,17 +202,17 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
             {taken && (
               <div className="text-xs opacity-80 mt-0.5">{taken}</div>
             )}
-            <div className="mt-2 flex items-center justify-between text-sm">
-              <div className="flex flex-col">
+            <div className="mt-2 flex items-center justify-between text-xs gap-3">
+              <div className="flex min-w-0 flex-col">
                 <span className="text-[11px] opacity-80">Prediction</span>
-                <span className="font-semibold">
+                <span className="font-semibold text-[12px] leading-tight truncate">
                   {typeof scorePercent === 'number' ? `${Math.round(scorePercent)}%` : '—'}
                   {scoreLabel ? <span className="opacity-70"> ({String(scoreLabel)})</span> : null}
                 </span>
               </div>
               <div className="flex flex-col text-right">
                 <span className="text-[11px] opacity-80">User score</span>
-                <span className="font-semibold">
+                <span className="font-semibold text-[12px] leading-tight">
                   {typeof userScorePercent === 'number' ? `${Math.round(userScorePercent)}%` : '—'}
                   {userScoreLabel ? <span className="opacity-70"> ({String(userScoreLabel)})</span> : null}
                 </span>
@@ -348,7 +353,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   return (
     <div
       className={selectedPin
-        ? "pointer-events-none fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-[min(92vw,640px)]"
+        ? "pointer-events-none fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-[min(92vw,320px)]"
         : "pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 w-[min(92vw,640px)]"}
       style={{ bottom: selectedPin ? undefined : "12vh" }}
       data-past={isPastSunset ? '1' : '0'}
@@ -356,14 +361,22 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
       <div className="pointer-events-auto space-y-3">
         {selectedPin && <SelectedPhotoPanel />}
         <AlertDialog open={locationMismatch} onOpenChange={setLocationMismatch}>
-          <AlertDialogContent>
+          <AlertDialogContent className="relative">
+            <AlertDialogCancel asChild>
+              <button
+                aria-label="Close"
+                className="absolute right-2 top-2 z-10 p-1 leading-none text-[32px] text-black/70 hover:text-black focus:outline-none flex items-center justify-center"
+              >
+                ×
+              </button>
+            </AlertDialogCancel>
             <AlertDialogHeader>
               <AlertDialogTitle>Location mismatch</AlertDialogTitle>
               <AlertDialogDescription>
                 Locations of the sunset forecast and your current device location differ. Please re-run the forecast for your current location before taking a photo.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="justify-start">
               <AlertDialogAction
                 onClick={async () => {
                   setGeoError(null)

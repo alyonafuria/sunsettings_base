@@ -824,7 +824,7 @@ export default function UploadPhotoPanel({
         const label =
           photoLocationLabel && photoLocationLabel.trim().length
             ? photoLocationLabel
-            : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
+            : `${center.lat.toFixed(3)}, ${center.lon.toFixed(3)}`;
         // ERC-721 compatible metadata JSON
         const shortId = (upJson.cid || "").slice(0, 8);
         const name = `sunsettings #${shortId}`;
