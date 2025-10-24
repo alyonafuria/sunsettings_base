@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
 import { Button } from "@/components/ui/button";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 
@@ -15,6 +17,8 @@ export default function AccountPage() {
     error: connectError,
   } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
+  const inMiniApp = useMiniAppContext();
+  const isMini = inMiniApp === true;
 
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
@@ -87,6 +91,40 @@ export default function AccountPage() {
     } catch {}
   };
 
+  const [authPending, setAuthPending] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
+  const [fcAuthed, setFcAuthed] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return sessionStorage.getItem('fc_authed') === '1'; } catch { return false; }
+  });
+  const signInFarcaster = async () => {
+    setAuthError(null);
+    setAuthPending(true);
+    try {
+      const bytes = new Uint8Array(16);
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      const nonce = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join("");
+      if (!(sdk as any)?.actions?.signIn) {
+        throw new Error('Farcaster signIn is unavailable in this context');
+      }
+      const res = await sdk.actions.signIn({ nonce });
+      // Log for debugging; UI remains on the same page
+      console.log('Farcaster signIn result:', res);
+      setFcAuthed(true);
+      try { sessionStorage.setItem('fc_authed', '1'); } catch {}
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sign-in failed';
+      console.warn('Farcaster signIn error:', e);
+      setAuthError(msg);
+    } finally {
+      setAuthPending(false);
+    }
+  };
+
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Top section: content-sized for mobile to avoid overlap */}
@@ -110,20 +148,38 @@ export default function AccountPage() {
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={connectCoinbase}
-                disabled={connectStatus === "pending"}
-              >
-                {connectStatus === "pending"
-                  ? "Connecting…"
-                  : "Sign up / Log in"}
-              </Button>
-              <div className="mt-2 text-sm">to start catching sunsets</div>
+              <div className="mb-2 text-sm">Sign up / Log in to catch sunsets</div>
+              {isMini ? (
+                fcAuthed ? (
+                  <div className="text-sm">Signed in with Farcaster</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={signInFarcaster}
+                    className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90 disabled:opacity-50"
+                    disabled={authPending}
+                  >
+                    {authPending ? 'Signing in…' : 'Sign in with Farcaster'}
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={connectCoinbase}
+                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
+                  disabled={connectStatus === 'pending'}
+                >
+                  {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
+                </button>
+              )}
               {connectError ? (
                 <div className="mt-2 text-xs text-red-600">
                   {String(connectError.message || "Connection failed")}
+                </div>
+              ) : null}
+              {authError ? (
+                <div className="mt-2 text-xs text-red-600">
+                  {authError}
                 </div>
               ) : null}
             </div>

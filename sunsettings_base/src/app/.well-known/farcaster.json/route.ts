@@ -5,7 +5,7 @@
 // }
 
 export async function GET() {
-return Response.json({
+return new Response(JSON.stringify({
    "accountAssociation": {
     "header": "eyJmaWQiOjc1MTMsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgxMTA5MjFFMTg2YjQ2MDUwQmI0NUJhOThhMzRCMThhYzAxQzkwZUQ0In0",
     "payload": "eyJkb21haW4iOiJjYXRjaC5zdW5zZXR0aW5ncy5hcHAifQ",
@@ -36,7 +36,12 @@ return Response.json({
     "ogTitle": "sunsettings",
     "ogDescription": "get prediction of sunset beauty, share your photos with the world and track sunset catching progress",
     "ogImageUrl": "https://catch.sunsettings.app/icon.png",
-    "noindex": true
+    "noindex": false
   }
+}), {
+  headers: {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600",
+  },
 });
 }
