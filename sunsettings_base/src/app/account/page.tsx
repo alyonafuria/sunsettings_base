@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useAccount, useConnect } from "wagmi";
-import { Button } from "@/components/ui/button";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
@@ -22,14 +21,17 @@ export default function AccountPage() {
 
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
-  const [loadingItems, setLoadingItems] = React.useState(false);
+  const refetchingRef = React.useRef(false);
+  const [basename, setBasename] = React.useState<string | null>(null);
+  const [basenameAvatar, setBasenameAvatar] = React.useState<string | null>(null);
 
   const refetch = React.useCallback(async () => {
     if (!isConnected || !address) {
       setItems([]);
       return;
     }
-    setLoadingItems(true);
+    if (refetchingRef.current) return;
+    refetchingRef.current = true;
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
@@ -54,7 +56,7 @@ export default function AccountPage() {
     } catch {
       setItems([]);
     } finally {
-      setLoadingItems(false);
+      refetchingRef.current = false;
     }
   }, [isConnected, address, chainId]);
 
@@ -82,6 +84,44 @@ export default function AccountPage() {
       }
     };
   }, [refetch]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isConnected || !address) {
+          setBasename(null);
+          setBasenameAvatar(null);
+          return;
+        }
+        const mod = await import('@/apis/basenames').catch(() => null as any);
+        const getName = (mod && (mod as any).getBasename) as undefined | ((a: string) => Promise<string | undefined>);
+        const getAvatar = (mod && (mod as any).getBasenameAvatar) as undefined | ((n: string) => Promise<string | undefined>);
+        if (!getName) return;
+        const name = await getName(address);
+        if (!cancelled) {
+          const validName = typeof name === 'string' && name.length ? name : null;
+          setBasename(validName);
+          if (validName && getAvatar) {
+            try {
+              const av = await getAvatar(validName as string);
+              if (!cancelled) setBasenameAvatar(typeof av === 'string' && av.length ? av : null);
+            } catch {
+              if (!cancelled) setBasenameAvatar(null);
+            }
+          } else {
+            setBasenameAvatar(null);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setBasename(null);
+          setBasenameAvatar(null);
+        }
+      }
+    })();
+    return () => { cancelled = true };
+  }, [isConnected, address]);
 
   const connectCoinbase = async () => {
     try {
@@ -130,10 +170,10 @@ export default function AccountPage() {
       {/* Top section: content-sized for mobile to avoid overlap */}
       <div className="shrink-0">
         <AccountInfo
-          loading={isConnecting || loadingItems}
-          avatarUrl={null}
-          wallet={address ?? null}
-          title={"sunset catcher"}
+          loading={!isConnected || isConnecting}
+          avatarUrl={basenameAvatar}
+          wallet={(basename as string | null) ?? (address ?? null)}
+          title={(basename as string | null) ?? (address ?? null)}
           postTimes={items
             .map((it) => (typeof it.time === "number" ? it.time : undefined))
             .filter((n): n is number => typeof n === "number")}
@@ -144,7 +184,7 @@ export default function AccountPage() {
       {/* Bottom gallery or connect CTA */}
       <div className="flex-1 min-h-0">
         {isConnected ? (
-          <Gallery loading={loadingItems} items={items.map((it) => it.image)} />
+          <Gallery items={items.map((it) => it.image)} />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-center">
             <div>
