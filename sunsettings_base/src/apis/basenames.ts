@@ -80,7 +80,7 @@ export async function getBasenameTextRecord(
     const contractParameters = buildBasenameTextRecordContract(basename, key);
     const textRecord = await baseClient.readContract(contractParameters);
     return textRecord as string;
-  } catch (error) {}
+  } catch {}
 }
 
 // Get a all TextRecords
@@ -95,7 +95,7 @@ export async function getBasenameTextRecords(basename: Basename) {
     });
 
     return textRecords;
-  } catch (error) {}
+  } catch {}
 }
 
 /**
@@ -142,5 +142,5 @@ export async function getBasename(address: Address) {
     if (basename) {
       return basename as Basename;
     }
-  } catch (error) {}
+  } catch {}
 }

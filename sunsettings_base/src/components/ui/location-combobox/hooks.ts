@@ -66,6 +66,7 @@ export function useLocationCombobox({
   }, [onChange, onResolveCoords])
 
   // Explicit detection
+  type GeoErr = { code?: number; message?: string }
   const runDetection = React.useCallback(() => {
     if (!("geolocation" in navigator)) {
       return
@@ -134,7 +135,7 @@ export function useLocationCombobox({
         // If explicitly denied, remember for the session to avoid repeated prompts
         try {
           // GeolocationPositionError.PERMISSION_DENIED === 1
-          if ((err as any)?.code === 1 || /denied/i.test(String(msg))) {
+          if ((err as GeoErr)?.code === 1 || /denied/i.test(String(msg))) {
             sessionStorage.setItem("geo_denied", "1")
           }
         } catch {}

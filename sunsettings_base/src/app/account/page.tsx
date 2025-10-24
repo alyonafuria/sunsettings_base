@@ -6,6 +6,8 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
+import { getBasename, getBasenameAvatar } from "@/apis/basenames";
+import type { Basename } from "@/apis/basenames";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
@@ -94,17 +96,13 @@ export default function AccountPage() {
           setBasenameAvatar(null);
           return;
         }
-        const mod = await import('@/apis/basenames').catch(() => null as any);
-        const getName = (mod && (mod as any).getBasename) as undefined | ((a: string) => Promise<string | undefined>);
-        const getAvatar = (mod && (mod as any).getBasenameAvatar) as undefined | ((n: string) => Promise<string | undefined>);
-        if (!getName) return;
-        const name = await getName(address);
+        const name = await getBasename(address);
         if (!cancelled) {
-          const validName = typeof name === 'string' && name.length ? name : null;
+          const validName: Basename | null = typeof name === 'string' && name.length ? (name as Basename) : null;
           setBasename(validName);
-          if (validName && getAvatar) {
+          if (validName) {
             try {
-              const av = await getAvatar(validName as string);
+              const av = await getBasenameAvatar(validName);
               if (!cancelled) setBasenameAvatar(typeof av === 'string' && av.length ? av : null);
             } catch {
               if (!cancelled) setBasenameAvatar(null);
@@ -148,10 +146,12 @@ export default function AccountPage() {
         for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
       }
       const nonce = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join("");
-      if (!(sdk as any)?.actions?.signIn) {
+      type MiniAppSdk = { actions?: { signIn?: (args: { nonce: string }) => Promise<unknown> } };
+      const maybe = (sdk as unknown as MiniAppSdk);
+      if (!maybe?.actions?.signIn) {
         throw new Error('Farcaster signIn is unavailable in this context');
       }
-      const res = await sdk.actions.signIn({ nonce });
+      const res = await maybe.actions.signIn({ nonce });
       // Log for debugging; UI remains on the same page
       console.log('Farcaster signIn result:', res);
       setFcAuthed(true);

@@ -100,13 +100,18 @@ export default function UploadPhotoPanel({
       return false;
     }
   });
+  type PermissionQueryResult = { state: PermissionState };
+  type NavigatorWithPermissions = Navigator & {
+    permissions?: { query?: (args: { name: PermissionName }) => Promise<PermissionQueryResult> };
+  };
+  type GeoErr = { code?: number; message?: string };
   const getGeoPermissionState = React.useCallback(async (): Promise<"granted" | "denied" | "prompt" | "unknown"> => {
     try {
-      const anyNav: any = navigator as any;
-      if (!anyNav?.permissions?.query) return "unknown";
-      const res = await anyNav.permissions.query({ name: "geolocation" as PermissionName });
-      const s = (res?.state ?? "unknown") as string;
-      if (s === "granted" || s === "denied" || s === "prompt") return s as any;
+      const n = navigator as NavigatorWithPermissions;
+      if (!n?.permissions?.query) return "unknown";
+      const res = await n.permissions.query({ name: "geolocation" as PermissionName });
+      const s = res?.state ?? "unknown";
+      if (s === "granted" || s === "denied" || s === "prompt") return s;
       return "unknown";
     } catch {
       return "unknown";
@@ -235,7 +240,47 @@ export default function UploadPhotoPanel({
         throw new Error("Geolocation not available");
       const state = await getGeoPermissionState();
       if (state === "denied" || geoDenied) {
-        setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+        // Fallback to IP-based coarse location
+        try {
+          const res = await fetch("/api/geo/ip", { cache: "no-store" });
+          if (res.ok) {
+            const j = await res.json();
+            const lat = Number(j?.lat);
+            const lon = Number(j?.lon);
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+              // Derive H3 and label
+              try {
+                const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+                const center = centerOf(h3);
+                setPhotoH3Index(h3);
+                setPhotoCellCenter(center);
+                const label = typeof j?.label === "string" && j.label.trim().length
+                  ? j.label
+                  : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
+                setPhotoLocationLabel(label);
+                // Dispatch preview event
+                try {
+                  window.dispatchEvent(
+                    new CustomEvent("sunsettings:photoPreview", {
+                      detail: {
+                        lat: center.lat,
+                        lon: center.lon,
+                        locationLabel: label,
+                        takenAtIso: takenAtIso ?? null,
+                        previewUrl: previewUrl || null,
+                      },
+                    })
+                  );
+                } catch {}
+                setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
+                return; // handled via IP fallback
+              } catch {}
+            }
+          }
+          setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+        } catch {
+          setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+        }
         return;
       }
       const pos: GeolocationPosition = await new Promise((resolve, reject) => {
@@ -307,10 +352,45 @@ export default function UploadPhotoPanel({
     } catch (e) {
       const msg = (e as GeolocationPositionError)?.message || (e as Error)?.message || "Location failed";
       setGpsError(msg);
-      const code = (e as any)?.code;
+      const code = (e as GeoErr)?.code;
       if (code === 1 || /denied/i.test(String(msg))) {
         try { sessionStorage.setItem("geo_denied", "1"); } catch {}
         setGeoDenied(true);
+        // Try IP fallback
+        try {
+          const res = await fetch("/api/geo/ip", { cache: "no-store" });
+          if (res.ok) {
+            const j = await res.json();
+            const lat = Number(j?.lat);
+            const lon = Number(j?.lon);
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+              try {
+                const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+                const center = centerOf(h3);
+                setPhotoH3Index(h3);
+                setPhotoCellCenter(center);
+                const label = typeof j?.label === "string" && j.label.trim().length
+                  ? j.label
+                  : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
+                setPhotoLocationLabel(label);
+                try {
+                  window.dispatchEvent(
+                    new CustomEvent("sunsettings:photoPreview", {
+                      detail: {
+                        lat: center.lat,
+                        lon: center.lon,
+                        locationLabel: label,
+                        takenAtIso: takenAtIso ?? null,
+                        previewUrl: previewUrl || null,
+                      },
+                    })
+                  );
+                } catch {}
+                setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
+              } catch {}
+            }
+          }
+        } catch {}
       }
       setGpsFix(null);
     } finally {
@@ -587,7 +667,7 @@ export default function UploadPhotoPanel({
                         } catch (e) {
                           const msg = (e as GeolocationPositionError)?.message || "Failed to get location";
                           setGeoError(msg);
-                          const code = (e as any)?.code;
+                          const code = (e as GeoErr)?.code;
                           if (code === 1 || /denied/i.test(String(msg))) {
                             try { sessionStorage.setItem("geo_denied", "1"); } catch {}
                             setGeoDenied(true);
