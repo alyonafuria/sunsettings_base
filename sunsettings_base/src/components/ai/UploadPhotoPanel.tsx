@@ -342,7 +342,14 @@ export default function UploadPhotoPanel({
       : "Can't read photo location";
     return (
       <div className="mx-auto flex flex-col items-center gap-3">
-        <figure className="w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
+        <figure className="relative w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
+          <button
+            aria-label="Close"
+            onClick={closePanel}
+            className="absolute right-2 top-2 z-10 h-8 w-8 bg-white text-black border-2 border-black flex items-center justify-center text-[22px] leading-none focus:outline-none"
+          >
+            ×
+          </button>
           <div className="relative">
             <div className="relative w-full aspect-4/3">
               <Image
@@ -662,7 +669,7 @@ export default function UploadPhotoPanel({
                           : false)
                       }
                     >
-                      {uploading ? "Submitting…" : "Submit"}
+                      {uploading ? "Posting…" : "Post"}
                     </Button>
                   ) : (
                     <Button
@@ -673,15 +680,6 @@ export default function UploadPhotoPanel({
                       {connectStatus === "pending"
                         ? "Connecting…"
                         : "Sign up / Log in"}
-                    </Button>
-                  )}
-                  {!uploading && (
-                    <Button
-                      type="button"
-                      variant="neutral"
-                      onClick={closePanel}
-                    >
-                      Cancel
                     </Button>
                   )}
                 </div>
