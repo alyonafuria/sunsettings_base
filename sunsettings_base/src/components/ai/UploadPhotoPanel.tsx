@@ -316,25 +316,11 @@ export default function UploadPhotoPanel({
                 setGeoError(null);
                 setGeoLoading(true);
                 try {
-                  if (!navigator.geolocation) {
-                    throw new Error("Geolocation not available");
-                  }
-                  const pos = await new Promise<GeolocationPosition>(
-                    (resolve, reject) => {
-                      navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                          enableHighAccuracy: true,
-                          timeout: 10000,
-                          maximumAge: 0,
-                        }
-                      );
-                    }
-                  );
-                  const lat = pos.coords.latitude;
-                  const lon = pos.coords.longitude;
-                  const accuracy = pos.coords.accuracy;
+                  // Unify with home page: use getPreferredLocation() which prefers Mini App SDK, then browser, then IP
+                  const pref = await getPreferredLocation();
+                  const lat = pref.lat;
+                  const lon = pref.lon;
+                  const accuracy = undefined as number | undefined; // preferred source may not include accuracy
                   const fixAtIso = new Date().toISOString();
                   // Compare with analysis coords at a coarse H3 resolution with tolerance
                   try {

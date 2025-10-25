@@ -65,15 +65,9 @@ export async function getPreferredLocation(): Promise<PreferredLocation> {
   } catch (e) {
     const code = (e as GeoErr)?.code;
     const msg = (e as GeoErr)?.message ?? "Geolocation failed";
-    // If explicitly denied, recordable by caller, but we still fall back to IP
-    // 3) IP fallback
-    try {
-      const ip = await fetchIpLocation();
-      return ip;
-    } catch {
-      const err = new Error(msg) as Error & GeoErr & { code?: number };
-      err.code = code;
-      throw err;
-    }
+    // No IP fallback: propagate error to caller so UI can request enabling device location
+    const err = new Error(msg) as Error & GeoErr & { code?: number };
+    err.code = code;
+    throw err;
   }
 }
