@@ -5,7 +5,7 @@ Practical fixes for the most common issues, especially in mobile webviews.
 ## Location isn’t detected
 - Inside Base Mini App, ensure the Base app has Location permission at the OS level.
 - If the app previously denied Location, you may need to toggle it in Settings and retry Detect.
-- If precise location is unavailable, the app falls back to IP-based coarse coordinates.
+- If precise location is unavailable, the app prompts you to enable device location and retry.
 - As a workaround, search for your city in the location combobox.
 
 ## Camera doesn’t open

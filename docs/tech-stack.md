@@ -13,7 +13,7 @@ This document captures the concrete technologies and services used to build Suns
 - **Geocoding & Search**: Nominatim (OpenStreetMap) for search and reverse geocoding to neighborhood/city labels.
 - **Mini App SDK**: `@farcaster/miniapp-sdk`
   - Environment detection via `useMiniAppContext()`.
-  - Base-aware location resolver: `getPreferredLocation()` prefers Mini App context, then browser geolocation, then IP.
+  - Base-aware location resolver: `getPreferredLocation()` prefers Mini App context, then browser geolocation.
 - **Wallet/AA**: `@coinbase/onchainkit` + `wagmi` on Base
   - EIP-712 signing via `viem`.
   - Server verifies signatures (EOA, EIP-1271; EIP-6492 if applicable).
@@ -24,7 +24,6 @@ This document captures the concrete technologies and services used to build Suns
 ## Backend (Next.js Route Handlers)
 - **Framework**: Next.js (App Router) with Route Handlers under `src/app/api/*`.
 - **APIs (current)**:
-  - `GET /api/geo/ip` – IP-based coarse geolocation.
   - `POST /api/geocode/reverse` – reverse geocoding to a human-readable label.
   - `POST /api/sunset-analyze` – server-side OpenAI call to analyze weather summary and return a sunset prediction.
   - Additional endpoints may be added as features ship.
