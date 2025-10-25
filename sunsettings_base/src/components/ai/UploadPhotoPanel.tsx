@@ -5,8 +5,9 @@ import { useAccount, useConnect } from "wagmi";
 import type { Abi } from "viem";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
-import { HelpCircle, X } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import {
   Transaction,
   TransactionButton,
@@ -67,9 +68,7 @@ export default function UploadPhotoPanel({
   const [metaCid, setMetaCid] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [userDecision, setUserDecision] = React.useState<"yes" | "no" | null>(
-    null
-  );
+  const [disagree, setDisagree] = React.useState(false);
   const [userScore, setUserScore] = React.useState<number | null>(null);
   const [photoH3Index, setPhotoH3Index] = React.useState<string | null>(null);
   const [photoCellCenter, setPhotoCellCenter] = React.useState<{
@@ -88,11 +87,9 @@ export default function UploadPhotoPanel({
     accuracy?: number;
     fixAtIso: string;
   } | null>(null);
-  const [gpsFixing, setGpsFixing] = React.useState(false);
-  const [gpsError, setGpsError] = React.useState<string | null>(null);
+  // Removed pre-capture detect flow; we still keep gpsFix for compatibility if set elsewhere
   const [geoLoading, setGeoLoading] = React.useState(false);
   const [geoError, setGeoError] = React.useState<string | null>(null);
-  const geoLockRef = React.useRef(false);
   const [geoDenied, setGeoDenied] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -103,14 +100,22 @@ export default function UploadPhotoPanel({
   });
   type PermissionQueryResult = { state: PermissionState };
   type NavigatorWithPermissions = Navigator & {
-    permissions?: { query?: (args: { name: PermissionName }) => Promise<PermissionQueryResult> };
+    permissions?: {
+      query?: (args: {
+        name: PermissionName;
+      }) => Promise<PermissionQueryResult>;
+    };
   };
   type GeoErr = { code?: number; message?: string };
-  const getGeoPermissionState = React.useCallback(async (): Promise<"granted" | "denied" | "prompt" | "unknown"> => {
+  const getGeoPermissionState = React.useCallback(async (): Promise<
+    "granted" | "denied" | "prompt" | "unknown"
+  > => {
     try {
       const n = navigator as NavigatorWithPermissions;
       if (!n?.permissions?.query) return "unknown";
-      const res = await n.permissions.query({ name: "geolocation" as PermissionName });
+      const res = await n.permissions.query({
+        name: "geolocation" as PermissionName,
+      });
       const s = res?.state ?? "unknown";
       if (s === "granted" || s === "denied" || s === "prompt") return s;
       return "unknown";
@@ -140,7 +145,7 @@ export default function UploadPhotoPanel({
     }, 0);
   };
 
-  // Re-evaluate mismatch whenever gpsFix or analysis coords change
+  // Re-evaluate mismatch when both gpsFix and analysis coords are present; do not auto-clear otherwise
   React.useEffect(() => {
     try {
       const COARSE_RES = 4;
@@ -158,12 +163,8 @@ export default function UploadPhotoPanel({
           setLocationMismatch(mismatchNow);
           onLocationMismatchChange?.(mismatchNow);
         }
-      } else {
-        if (locationMismatch) {
-          setLocationMismatch(false);
-          onLocationMismatchChange?.(false);
-        }
       }
+      // If either value is missing, leave current mismatch state unchanged
     } catch {
       // ignore
     }
@@ -181,7 +182,7 @@ export default function UploadPhotoPanel({
     setFile(null);
     setPhotoCid(null);
     setMetaCid(null);
-    setUserDecision(null);
+    setDisagree(false);
     setUserScore(null);
     // ensure all derived state is reset so a future photo starts clean
     setPhotoH3Index(null);
@@ -206,6 +207,15 @@ export default function UploadPhotoPanel({
       setIsMobile(false);
     }
   }, []);
+
+  // Keep user score in sync with the checkbox
+  React.useEffect(() => {
+    if (disagree) {
+      setUserScore(null);
+    } else {
+      setUserScore(typeof scorePercent === "number" ? scorePercent : null);
+    }
+  }, [disagree, scorePercent]);
 
   React.useEffect(() => {
     try {
@@ -359,9 +369,9 @@ export default function UploadPhotoPanel({
       const url = URL.createObjectURL(f);
       setPreviewUrl(url);
       setCaptureTimestamp(new Date().toISOString());
-      // default: wait for user decision; reset prior choices
-      setUserDecision(null);
-      setUserScore(null);
+      // default: agree with the score; reset checkbox and set initial userScore
+      setDisagree(false);
+      setUserScore(typeof scorePercent === "number" ? scorePercent : null);
       // compute prehash and set takenAt from captureTimestamp or file's lastModified; do NOT clear pre-captured location
       (async () => {
         // Compute prehash immediately using file bytes + gps fix + capture timestamp
@@ -396,7 +406,7 @@ export default function UploadPhotoPanel({
     } else {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
-      setUserDecision(null);
+      setDisagree(false);
       setUserScore(null);
     }
   }
@@ -418,29 +428,76 @@ export default function UploadPhotoPanel({
             <Button
               type="button"
               variant="neutral"
-              onClick={detectLocation}
-              disabled={gpsFixing || !!gpsFix}
-            >
-              {gpsFixing
-                ? "Detecting…"
-                : gpsFix
-                ? "Location locked"
-                : "Detect location"}
-            </Button>
-            <Button
-              type="button"
-              variant="neutral"
-              onClick={() => {
-                onOpenPicker?.();
-                setCaptureTimestamp(new Date().toISOString());
-                fileInputRef.current?.click();
+              onClick={async () => {
+                setGeoError(null);
+                setGeoLoading(true);
+                try {
+                  if (!navigator.geolocation) {
+                    throw new Error("Geolocation not available");
+                  }
+                  const pos = await new Promise<GeolocationPosition>(
+                    (resolve, reject) => {
+                      navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                          enableHighAccuracy: true,
+                          timeout: 10000,
+                          maximumAge: 0,
+                        }
+                      );
+                    }
+                  );
+                  const lat = pos.coords.latitude;
+                  const lon = pos.coords.longitude;
+                  const accuracy = pos.coords.accuracy;
+                  const fixAtIso = new Date().toISOString();
+                  // Compare with analysis coords at a coarse H3 resolution
+                  try {
+                    const COARSE_RES = 4;
+                    const analysisLat = coords?.lat;
+                    const analysisLon = coords?.lon;
+                    if (
+                      typeof analysisLat === "number" &&
+                      typeof analysisLon === "number"
+                    ) {
+                      const a = toH3(analysisLat, analysisLon, COARSE_RES);
+                      const p = toH3(lat, lon, COARSE_RES);
+                      const mismatchNow = a !== p;
+                      setLocationMismatch(mismatchNow);
+                      onLocationMismatchChange?.(mismatchNow);
+                      if (mismatchNow) {
+                        return; // Do not open the camera
+                      }
+                    }
+                  } catch {}
+                  // Set gps fix for metadata/prehash and optionally precompute photo cell
+                  setGpsFix({ lat, lon, accuracy, fixAtIso });
+                  try {
+                    const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+                    const center = centerOf(h3);
+                    setPhotoH3Index(h3);
+                    setPhotoCellCenter(center);
+                  } catch {}
+                  // Proceed to open camera
+                  onOpenPicker?.();
+                  setCaptureTimestamp(new Date().toISOString());
+                  fileInputRef.current?.click();
+                } catch (e) {
+                  const msg =
+                    (e as GeolocationPositionError | Error)?.message ||
+                    "Failed to get location";
+                  setGeoError(msg);
+                } finally {
+                  setGeoLoading(false);
+                }
               }}
-              disabled={uploading || !gpsFix || gpsFixing || locationMismatch}
+              disabled={uploading || geoLoading}
             >
-              <span>Take photo</span>
+              <span>{geoLoading ? "Locating…" : "Take photo"}</span>
             </Button>
           </div>
-          {gpsError && <div className="text-xs text-center">{gpsError}</div>}
+          {geoError && <div className="text-xs text-center">{geoError}</div>}
           {error && <div className="text-xs text-center">{error}</div>}
         </div>
       </>
@@ -462,7 +519,14 @@ export default function UploadPhotoPanel({
       : "Can't read photo location";
     return (
       <div className="mx-auto flex flex-col items-center gap-3">
-        <figure className="w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
+        <figure className="relative w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
+          <button
+            aria-label="Close"
+            onClick={closePanel}
+            className="absolute right-2 top-2 z-10 h-8 w-8 bg-white text-black border-2 border-black flex items-center justify-center text-[22px] leading-none focus:outline-none"
+          >
+            ×
+          </button>
           <div className="relative">
             <div className="relative w-full aspect-4/3">
               <Image
@@ -474,15 +538,6 @@ export default function UploadPhotoPanel({
                 unoptimized={unoptimized}
               />
             </div>
-            {/* Close button (replaces Cancel), top-right over the photo */}
-            <button
-              type="button"
-              onClick={closePanel}
-              className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
-              aria-label="Close photo"
-            >
-              <X className="w-6 h-6 md:w-6 md:h-6" />
-            </button>
             {displayLabel &&
               (hasExif ? (
                 <div className="absolute top-2 left-2 text-[11px] px-2 py-1 bg-white text-black border-2 border-black">
@@ -542,7 +597,9 @@ export default function UploadPhotoPanel({
                           const state = await getGeoPermissionState();
                           const denied = state === "denied" || geoDenied;
                           if (denied) {
-                            setGeoError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+                            setGeoError(
+                              "Location permission is blocked. Enable it in device Settings for the Base app and try again."
+                            );
                             return;
                           }
                         } catch {}
@@ -604,11 +661,15 @@ export default function UploadPhotoPanel({
                             setLabelLoading(false);
                           }
                         } catch (e) {
-                          const msg = (e as GeolocationPositionError)?.message || "Failed to get location";
+                          const msg =
+                            (e as GeolocationPositionError)?.message ||
+                            "Failed to get location";
                           setGeoError(msg);
                           const code = (e as GeoErr)?.code;
                           if (code === 1 || /denied/i.test(String(msg))) {
-                            try { sessionStorage.setItem("geo_denied", "1"); } catch {}
+                            try {
+                              sessionStorage.setItem("geo_denied", "1");
+                            } catch {}
                             setGeoDenied(true);
                           }
                         } finally {
@@ -730,33 +791,17 @@ export default function UploadPhotoPanel({
                     You need to sign up / log in to submit a photo.
                   </div>
                 )}
-                <div className="text-sm">Agree with the score?</div>
-                <div className="flex justify-center gap-2">
-                  <Button
-                    type="button"
-                    variant={userDecision === "yes" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("yes");
-                      setUserScore(scorePercent ?? null);
-                    }}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">Disagree with the score?</div>
+                  <Switch
+                    aria-label="Disagree with the score"
+                    checked={disagree}
+                    onCheckedChange={(v) => setDisagree(v)}
                     disabled={uploading}
-                  >
-                    <span>Yes</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={userDecision === "no" ? "default" : "neutral"}
-                    onClick={() => {
-                      setUserDecision("no");
-                      setUserScore(null);
-                    }}
-                    disabled={uploading}
-                  >
-                    <span>No</span>
-                  </Button>
+                  />
                 </div>
 
-                {userDecision === "no" && (
+                {disagree && (
                   <div className="pt-1">
                     <div className="text-xs mb-1 opacity-80">
                       Adjust your score
@@ -927,16 +972,24 @@ export default function UploadPhotoPanel({
         const photoCreatedAt = file
           ? new Date(file.lastModified).toISOString()
           : null;
-        // For location we now ALWAYS use the pre-capture gpsFix (button), not EXIF.
-        // Compute H3/center from gpsFix (button requires gpsFix before capture)
-        const lat = gpsFix?.lat as number;
-        const lon = gpsFix?.lon as number;
-        const h3 = toH3(lat, lon, DEFAULT_H3_RES);
-        const center = centerOf(h3);
+        // Determine location for metadata: prefer post-capture selected/derived H3;
+        // fallback to any pre-capture gpsFix; otherwise fail gracefully.
+        let h3: string | null = photoH3Index;
+        let center: { lat: number; lon: number } | null = null;
+        if (h3) {
+          center = centerOf(h3);
+        } else if (gpsFix?.lat != null && gpsFix?.lon != null) {
+          h3 = toH3(gpsFix.lat, gpsFix.lon, DEFAULT_H3_RES);
+          center = centerOf(h3);
+        } else {
+          throw new Error(
+            "No location set. Please set location before submitting."
+          );
+        }
         const label =
           photoLocationLabel && photoLocationLabel.trim().length
             ? photoLocationLabel
-            : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
+            : `${center.lat.toFixed(3)}, ${center.lon.toFixed(3)}`;
         // ERC-721 compatible metadata JSON
         const shortId = (upJson.cid || "").slice(0, 8);
         const name = `sunsettings #${shortId}`;
@@ -975,7 +1028,7 @@ export default function UploadPhotoPanel({
             photoH3Index: h3,
             photoCellCenterLat: center.lat,
             photoCellCenterLon: center.lon,
-            gpsSource: "pre_capture",
+            gpsSource: gpsFix ? "pre_capture" : "post_capture",
             deviceId: deviceId || "",
             gpsFixAtIso: gpsFix?.fixAtIso || "",
             captureTimestamp: captureTimestamp || "",
@@ -1040,7 +1093,7 @@ export default function UploadPhotoPanel({
       // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
       setPreviewUrl(null);
       setFile(null);
-      setUserDecision(null);
+      setDisagree(false);
       setUserScore(null);
     } catch (e) {
       setError((e as Error)?.message || "Upload failed");

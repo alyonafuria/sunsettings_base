@@ -112,7 +112,7 @@ export default function FlipCard({
     <div
       className={[
         "mx-auto animate-in fade-in-50",
-        isClosed ? "w-28 h-16" : "w-full h-44",
+        isClosed ? "w-56 h-32" : "w-full h-44",
         className ?? "",
       ].join(" ")}
       style={rootStyle}
@@ -120,7 +120,7 @@ export default function FlipCard({
       <div
         onClick={handleCardClick}
         style={innerStyle}
-        className={["transition-transform duration-200", isClosed ? "scale-75" : "scale-100"].join(" ")}
+        className={["transition-transform duration-200", isClosed ? "scale-100" : "scale-100"].join(" ")}
       >
         {/* Maximize button removed per design */}
         {/* Front */}
@@ -142,8 +142,8 @@ export default function FlipCard({
             <div className="text-center">
               {isClosed ? (
                 <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-sm font-bold mb-1">Sunset</div>
-                  <div className="text-xl font-extrabold">
+                  <div className="text-lg md:text-xl font-bold mb-1">Sunset</div>
+                  <div className="text-5xl font-extrabold">
                     {shownProb}
                   </div>
                 </div>
