@@ -5,21 +5,22 @@ import { useAccount } from "wagmi";
 import OnboardingModal from "./OnboardingModal";
 
 export default function OnboardingGate() {
-  const { isConnected } = useAccount();
+  const { isConnected, status } = useAccount();
   const [open, setOpen] = React.useState(false);
 
   // Decide when to show onboarding
   React.useEffect(() => {
     if (typeof window === "undefined") return;
+    // Wait until wagmi has resolved connection state to avoid false opens
+    if (status === "connecting" || status === "reconnecting") return;
     try {
       const seen = localStorage.getItem("onboarding_seen") === "1";
-      // Show if first visit (not seen) OR not logged in
       const shouldOpen = !seen || !isConnected;
-      setOpen(shouldOpen);
+      if (shouldOpen) setOpen(true);
     } catch {
-      setOpen(!isConnected);
+      if (!isConnected) setOpen(true);
     }
-  }, [isConnected]);
+  }, [isConnected, status]);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
