@@ -304,7 +304,8 @@ export default function UploadPhotoPanel({
           type="file"
           accept="image/*"
           capture="environment"
-          className="hidden"
+          id="sun-photo-input"
+          className="sr-only"
           onChange={onFileChange}
         />
         <div className="w-full flex flex-col items-center gap-2 mx-auto">
@@ -316,10 +317,51 @@ export default function UploadPhotoPanel({
                 setGeoError(null);
                 setGeoLoading(true);
                 try {
-                  // Unify with home page: use getPreferredLocation() which prefers Mini App SDK, then browser, then IP
-                  const pref = await getPreferredLocation();
-                  const lat = pref.lat;
-                  const lon = pref.lon;
+                  console.log("[photo] Take photo clicked");
+                  // Preflight: if permission is explicitly denied, fail fast with guidance
+                  try {
+                    const perm = await getGeoPermissionState();
+                    if (perm === "denied") {
+                      setGeoError(
+                        "Location permission is blocked. Enable it in device Settings for the Base app and try again."
+                      );
+                      console.warn("[photo] geolocation permission denied preflight");
+                      return;
+                    }
+                  } catch {}
+
+                  // Unify with home page: use getPreferredLocation(), but guard with a short timeout
+                  const withTimeout = async <T,>(p: Promise<T>, ms: number) =>
+                    Promise.race([
+                      p,
+                      new Promise<T>((_, reject) =>
+                        setTimeout(() => reject(Object.assign(new Error("Location timeout"), { code: 3 })), ms)
+                      ),
+                    ]);
+
+                  let lat: number, lon: number;
+                  let used: "preferred" | "highAccuracyFallback" = "preferred";
+                  try {
+                    const pref = await withTimeout(getPreferredLocation(), 5000);
+                    console.log("[photo] preferred location", pref);
+                    lat = pref.lat;
+                    lon = pref.lon;
+                  } catch (e) {
+                    console.warn("[photo] preferred location timed out/failed, trying high-accuracy fallback", e);
+                    // High-accuracy direct browser geolocation fallback (short timeout)
+                    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                      if (!navigator.geolocation) return reject(Object.assign(new Error("Geolocation unsupported"), { code: 0 }));
+                      navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+                      );
+                    });
+                    lat = pos.coords.latitude;
+                    lon = pos.coords.longitude;
+                    used = "highAccuracyFallback";
+                    console.log("[photo] high-accuracy fallback location", { lat, lon });
+                  }
                   const accuracy = undefined as number | undefined; // preferred source may not include accuracy
                   const fixAtIso = new Date().toISOString();
                   // Compare with analysis coords at a coarse H3 resolution with tolerance
@@ -338,6 +380,13 @@ export default function UploadPhotoPanel({
                         lon,
                         COARSE_RES
                       );
+                      console.log("[photo] mismatch check", {
+                        analysisLat,
+                        analysisLon,
+                        lat,
+                        lon,
+                        mismatchNow,
+                      });
                       setLocationMismatch(mismatchNow);
                       onLocationMismatchChange?.(mismatchNow);
                       if (mismatchNow) {
@@ -345,6 +394,7 @@ export default function UploadPhotoPanel({
                         setGeoError(
                           "Your current location doesn't match the selected spot. Move closer to the target location and try again."
                         );
+                        console.warn("[photo] blocked due to location mismatch");
                         return; // Do not open the camera
                       }
                     }
@@ -360,12 +410,30 @@ export default function UploadPhotoPanel({
                   // Proceed to open camera
                   onOpenPicker?.();
                   setCaptureTimestamp(new Date().toISOString());
-                  fileInputRef.current?.click();
+                  try {
+                    const input = fileInputRef.current;
+                    console.log("[photo] attempting to open camera", {
+                      inputExists: Boolean(input),
+                      displayNone: input ? getComputedStyle(input).display === "none" : null,
+                      visibility: input ? getComputedStyle(input).visibility : null,
+                    });
+                    input?.click();
+                    window.dispatchEvent(
+                      new CustomEvent("sunsettings:cameraOpenAttempt", {
+                        detail: { ts: Date.now() },
+                      })
+                    );
+                  } catch (e) {
+                    console.error("[photo] failed to click input", e);
+                  }
                 } catch (e) {
-                  const msg =
-                    (e as GeolocationPositionError | Error)?.message ||
-                    "Failed to get location";
+                  const code = (e as { code?: number })?.code;
+                  const raw = (e as GeolocationPositionError | Error)?.message || "Failed to get location";
+                  const msg = code === 3
+                    ? "Location timed out. You can still open the camera using the fallback below, then enable device location and retry."
+                    : raw;
                   setGeoError(msg);
+                  console.error("[photo] location error", e);
                 } finally {
                   setGeoLoading(false);
                 }
@@ -374,6 +442,19 @@ export default function UploadPhotoPanel({
             >
               <span>{geoLoading ? "Locating…" : "Take photo"}</span>
             </Button>
+            {/* Fallback path: open camera immediately via label activation without location gating */}
+            <label
+              htmlFor="sun-photo-input"
+              className="inline-flex items-center justify-center px-4 py-2 border border-input rounded-md bg-background text-foreground text-sm cursor-pointer select-none"
+              onClick={() => {
+                try {
+                  console.log("[photo] fallback label clicked -> opening camera immediately");
+                  window.dispatchEvent(new CustomEvent("sunsettings:cameraOpenAttempt", { detail: { ts: Date.now(), fallback: true } }));
+                } catch {}
+              }}
+            >
+              Open camera (fallback)
+            </label>
           </div>
           {geoError && <div className="text-xs text-center">{geoError}</div>}
           {error && <div className="text-xs text-center">{error}</div>}
