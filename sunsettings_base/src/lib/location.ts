@@ -71,8 +71,8 @@ export async function getPreferredLocation(): Promise<PreferredLocation> {
       const ip = await fetchIpLocation();
       return ip;
     } catch {
-      const err = new Error(msg) as Error & GeoErr;
-      (err as any).code = code;
+      const err = new Error(msg) as Error & GeoErr & { code?: number };
+      err.code = code;
       throw err;
     }
   }
