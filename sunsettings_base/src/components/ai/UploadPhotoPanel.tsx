@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3";
+import { toH3, centerOf, DEFAULT_H3_RES, roughlySameAtCoarse } from "@/lib/h3";
 
 export default function UploadPhotoPanel({
   locationLabel,
@@ -155,9 +155,13 @@ export default function UploadPhotoPanel({
         typeof analysisLat === "number" &&
         typeof analysisLon === "number"
       ) {
-        const a = toH3(analysisLat, analysisLon, COARSE_RES);
-        const p = toH3(gpsFix.lat, gpsFix.lon, COARSE_RES);
-        const mismatchNow = a !== p;
+        const mismatchNow = !roughlySameAtCoarse(
+          analysisLat,
+          analysisLon,
+          gpsFix.lat,
+          gpsFix.lon,
+          COARSE_RES
+        );
         if (mismatchNow !== locationMismatch) {
           setLocationMismatch(mismatchNow);
           onLocationMismatchChange?.(mismatchNow);
@@ -333,7 +337,7 @@ export default function UploadPhotoPanel({
                   const lon = pos.coords.longitude;
                   const accuracy = pos.coords.accuracy;
                   const fixAtIso = new Date().toISOString();
-                  // Compare with analysis coords at a coarse H3 resolution
+                  // Compare with analysis coords at a coarse H3 resolution with tolerance
                   try {
                     const COARSE_RES = 4;
                     const analysisLat = coords?.lat;
@@ -342,9 +346,13 @@ export default function UploadPhotoPanel({
                       typeof analysisLat === "number" &&
                       typeof analysisLon === "number"
                     ) {
-                      const a = toH3(analysisLat, analysisLon, COARSE_RES);
-                      const p = toH3(lat, lon, COARSE_RES);
-                      const mismatchNow = a !== p;
+                      const mismatchNow = !roughlySameAtCoarse(
+                        analysisLat,
+                        analysisLon,
+                        lat,
+                        lon,
+                        COARSE_RES
+                      );
                       setLocationMismatch(mismatchNow);
                       onLocationMismatchChange?.(mismatchNow);
                       if (mismatchNow) {
