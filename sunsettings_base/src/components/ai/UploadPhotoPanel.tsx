@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3";
+import { getPreferredLocation } from "@/lib/location";
 
 export default function UploadPhotoPanel({
   locationLabel,
@@ -236,63 +237,10 @@ export default function UploadPhotoPanel({
     setGpsError(null);
     setGpsFixing(true);
     try {
-      if (!("geolocation" in navigator))
-        throw new Error("Geolocation not available");
-      const state = await getGeoPermissionState();
-      if (state === "denied" || geoDenied) {
-        // Fallback to IP-based coarse location
-        try {
-          const res = await fetch("/api/geo/ip", { cache: "no-store" });
-          if (res.ok) {
-            const j = await res.json();
-            const lat = Number(j?.lat);
-            const lon = Number(j?.lon);
-            if (Number.isFinite(lat) && Number.isFinite(lon)) {
-              // Derive H3 and label
-              try {
-                const h3 = toH3(lat, lon, DEFAULT_H3_RES);
-                const center = centerOf(h3);
-                setPhotoH3Index(h3);
-                setPhotoCellCenter(center);
-                const label = typeof j?.label === "string" && j.label.trim().length
-                  ? j.label
-                  : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
-                setPhotoLocationLabel(label);
-                // Dispatch preview event
-                try {
-                  window.dispatchEvent(
-                    new CustomEvent("sunsettings:photoPreview", {
-                      detail: {
-                        lat: center.lat,
-                        lon: center.lon,
-                        locationLabel: label,
-                        takenAtIso: takenAtIso ?? null,
-                        previewUrl: previewUrl || null,
-                      },
-                    })
-                  );
-                } catch {}
-                setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
-                return; // handled via IP fallback
-              } catch {}
-            }
-          }
-          setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
-        } catch {
-          setGpsError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
-        }
-        return;
-      }
-      const pos: GeolocationPosition = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        });
-      });
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      const accuracy = pos.coords.accuracy;
+      const pref = await getPreferredLocation();
+      const lat = pref.lat;
+      const lon = pref.lon;
+      const accuracy = undefined;
       const fixAtIso = new Date().toISOString();
       setGpsFix({ lat, lon, accuracy, fixAtIso });
       // Immediately set H3/center and resolve label for map & metadata
@@ -301,6 +249,9 @@ export default function UploadPhotoPanel({
         const center = centerOf(h3);
         setPhotoH3Index(h3);
         setPhotoCellCenter(center);
+        if (pref.source === "ip") {
+          setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
+        }
         // Evaluate location mismatch at a coarse H3 resolution (state/region scale)
         try {
           const COARSE_RES = 4;
@@ -597,21 +548,9 @@ export default function UploadPhotoPanel({
                         } catch {}
                         setGeoLoading(true);
                         try {
-                          const pos = await new Promise<GeolocationPosition>(
-                            (resolve, reject) => {
-                              navigator.geolocation.getCurrentPosition(
-                                resolve,
-                                reject,
-                                {
-                                  enableHighAccuracy: true,
-                                  timeout: 10000,
-                                  maximumAge: 0,
-                                }
-                              );
-                            }
-                          );
-                          const lat = pos.coords.latitude;
-                          const lon = pos.coords.longitude;
+                          const pref = await getPreferredLocation();
+                          const lat = pref.lat;
+                          const lon = pref.lon;
                           const h3 = toH3(lat, lon, DEFAULT_H3_RES);
                           const center = centerOf(h3);
                           setPhotoH3Index(h3);
