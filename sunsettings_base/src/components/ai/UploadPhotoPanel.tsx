@@ -89,7 +89,6 @@ export default function UploadPhotoPanel({
   // Removed pre-capture detect flow; we still keep gpsFix for compatibility if set elsewhere
   const [geoLoading, setGeoLoading] = React.useState(false);
   const [geoError, setGeoError] = React.useState<string | null>(null);
-  const geoLockRef = React.useRef(false);
   const [geoDenied, setGeoDenied] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -100,14 +99,22 @@ export default function UploadPhotoPanel({
   });
   type PermissionQueryResult = { state: PermissionState };
   type NavigatorWithPermissions = Navigator & {
-    permissions?: { query?: (args: { name: PermissionName }) => Promise<PermissionQueryResult> };
+    permissions?: {
+      query?: (args: {
+        name: PermissionName;
+      }) => Promise<PermissionQueryResult>;
+    };
   };
   type GeoErr = { code?: number; message?: string };
-  const getGeoPermissionState = React.useCallback(async (): Promise<"granted" | "denied" | "prompt" | "unknown"> => {
+  const getGeoPermissionState = React.useCallback(async (): Promise<
+    "granted" | "denied" | "prompt" | "unknown"
+  > => {
     try {
       const n = navigator as NavigatorWithPermissions;
       if (!n?.permissions?.query) return "unknown";
-      const res = await n.permissions.query({ name: "geolocation" as PermissionName });
+      const res = await n.permissions.query({
+        name: "geolocation" as PermissionName,
+      });
       const s = res?.state ?? "unknown";
       if (s === "granted" || s === "denied" || s === "prompt") return s;
       return "unknown";
@@ -160,7 +167,13 @@ export default function UploadPhotoPanel({
     } catch {
       // ignore
     }
-  }, [gpsFix, coords?.lat, coords?.lon, locationMismatch, onLocationMismatchChange]);
+  }, [
+    gpsFix,
+    coords?.lat,
+    coords?.lon,
+    locationMismatch,
+    onLocationMismatchChange,
+  ]);
 
   const closePanel = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -303,13 +316,19 @@ export default function UploadPhotoPanel({
                   if (!navigator.geolocation) {
                     throw new Error("Geolocation not available");
                   }
-                  const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                      enableHighAccuracy: true,
-                      timeout: 10000,
-                      maximumAge: 0,
-                    });
-                  });
+                  const pos = await new Promise<GeolocationPosition>(
+                    (resolve, reject) => {
+                      navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                          enableHighAccuracy: true,
+                          timeout: 10000,
+                          maximumAge: 0,
+                        }
+                      );
+                    }
+                  );
                   const lat = pos.coords.latitude;
                   const lon = pos.coords.longitude;
                   const accuracy = pos.coords.accuracy;
@@ -319,7 +338,10 @@ export default function UploadPhotoPanel({
                     const COARSE_RES = 4;
                     const analysisLat = coords?.lat;
                     const analysisLon = coords?.lon;
-                    if (typeof analysisLat === "number" && typeof analysisLon === "number") {
+                    if (
+                      typeof analysisLat === "number" &&
+                      typeof analysisLon === "number"
+                    ) {
                       const a = toH3(analysisLat, analysisLon, COARSE_RES);
                       const p = toH3(lat, lon, COARSE_RES);
                       const mismatchNow = a !== p;
@@ -343,7 +365,9 @@ export default function UploadPhotoPanel({
                   setCaptureTimestamp(new Date().toISOString());
                   fileInputRef.current?.click();
                 } catch (e) {
-                  const msg = (e as GeolocationPositionError | Error)?.message || "Failed to get location";
+                  const msg =
+                    (e as GeolocationPositionError | Error)?.message ||
+                    "Failed to get location";
                   setGeoError(msg);
                 } finally {
                   setGeoLoading(false);
@@ -454,7 +478,9 @@ export default function UploadPhotoPanel({
                           const state = await getGeoPermissionState();
                           const denied = state === "denied" || geoDenied;
                           if (denied) {
-                            setGeoError("Location permission is blocked. Enable it in device Settings for the Base app and try again.");
+                            setGeoError(
+                              "Location permission is blocked. Enable it in device Settings for the Base app and try again."
+                            );
                             return;
                           }
                         } catch {}
@@ -528,11 +554,15 @@ export default function UploadPhotoPanel({
                             setLabelLoading(false);
                           }
                         } catch (e) {
-                          const msg = (e as GeolocationPositionError)?.message || "Failed to get location";
+                          const msg =
+                            (e as GeolocationPositionError)?.message ||
+                            "Failed to get location";
                           setGeoError(msg);
                           const code = (e as GeoErr)?.code;
                           if (code === 1 || /denied/i.test(String(msg))) {
-                            try { sessionStorage.setItem("geo_denied", "1"); } catch {}
+                            try {
+                              sessionStorage.setItem("geo_denied", "1");
+                            } catch {}
                             setGeoDenied(true);
                           }
                         } finally {
@@ -954,10 +984,10 @@ export default function UploadPhotoPanel({
         } catch {}
       }
       // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
-  setPreviewUrl(null);
-  setFile(null);
-  setDisagree(false);
-  setUserScore(null);
+      setPreviewUrl(null);
+      setFile(null);
+      setDisagree(false);
+      setUserScore(null);
     } catch (e) {
       setError((e as Error)?.message || "Upload failed");
     } finally {
