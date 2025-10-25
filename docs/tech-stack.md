@@ -3,86 +3,56 @@
 This document captures the concrete technologies and services used to build Sunsettings.
 
 ## Client (Primary)
-- **Platform**: React (mobile-first web app with PWA)
-  - Bundler: Vite.
-  - Routing: React Router.
-  - State: React Query/Zustand/Redux (lightweight preferred).
-  - PWA: Web App Manifest + Service Worker (Workbox) for installability and offline caching of gallery data.
-- **UI**: neobrutalism.dev components and style principles (high contrast, chunky borders, playful).
-- **Maps**: Mapbox GL JS for rendering maps and markers.
-- **Geocoding**: Mapbox Geocoding API for neighborhood/city labels (e.g., "Pankow, Berlin").
-- **Wallet/AA**: Coinbase Smart Wallet Web SDK (Base smart account)
-  - EIP-712 typed data signing via viem or ethers v6.
-  - Server verifies signatures (EOA recovery or EIP-1271; support EIP-6492 envelopes).
-- **Networking**: `fetch`/`axios` for API calls to backend.
-- **Media**: Browser file input + client-side SHA-256 hashing for `fileHash` pre-checks.
+- **Platform**: Next.js (App Router) mobile-first web app
+  - Routing: Next.js App Router.
+  - State/query: `@tanstack/react-query` where needed.
+  - PWA: Web App Manifest; service worker optional.
+- **UI**: TailwindCSS v4 + shadcn-style primitives (Radix UI)
+  - High-contrast, bold borders; accessible components.
+- **Maps**: Mapbox GL JS for map rendering and markers.
+- **Geocoding & Search**: Nominatim (OpenStreetMap) for search and reverse geocoding to neighborhood/city labels.
+- **Mini App SDK**: `@farcaster/miniapp-sdk`
+  - Environment detection via `useMiniAppContext()`.
+  - Base-aware location resolver: `getPreferredLocation()` prefers Mini App context, then browser geolocation, then IP.
+- **Wallet/AA**: `@coinbase/onchainkit` + `wagmi` on Base
+  - EIP-712 signing via `viem`.
+  - Server verifies signatures (EOA, EIP-1271; EIP-6492 if applicable).
+  - Smart Wallet UX with gas sponsorship via Base paymaster using OnchainKit `Transaction` with `isSponsored`.
+- **Networking**: native `fetch` for backend APIs.
+- **Media**: Browser file input + client-side SHA-256 hashing for `fileHash`.
 
 ## Backend (Next.js Route Handlers)
-- **Framework**: Next.js (App Router) with server routes under `/api/*`.
-- **APIs**:
-  - `POST /api/auth/challenge` – per-user nonce issuance.
-  - `POST /api/pin` – secure Pinata pinning using server-side JWT, returns `{ cid, fileHash }`.
-  - `POST /api/claim` – verifies EIP-712 claim and writes record to DB (with optional location + score).
-  - `GET /api/gallery/:address` – list photos by address.
-  - `GET /api/stats/:address` – sunset count and basic stats.
+- **Framework**: Next.js (App Router) with Route Handlers under `src/app/api/*`.
+- **APIs (current)**:
+  - `GET /api/geo/ip` – IP-based coarse geolocation.
+  - `POST /api/geocode/reverse` – reverse geocoding to a human-readable label.
+  - `POST /api/sunset-analyze` – server-side OpenAI call to analyze weather summary and return a sunset prediction.
+  - Additional endpoints may be added as features ship.
 - **Runtimes**:
-  - Use Node.js runtime for routes needing file streams/crypto (e.g., `/api/pin`, `/api/claim`).
-  - Edge runtime optional for read-only endpoints if desired.
-- **Authorship verification**:
-  - EOA: recover address from EIP-712 signature.
-  - Smart Account: call `isValidSignature` (EIP-1271) on the account; unwrap EIP-6492 if present.
+  - Node.js runtime for API routes.
+  - Server-side AI: implemented in `src/lib/ai/services/SunsetAIService.ts` and consumed by `src/app/api/sunset-analyze/route.ts`.
+- **On-chain interactions**:
+  - Client mints or calls contracts using `@coinbase/onchainkit/transaction` components.
+  - Example: see `src/components/ai/UploadPhotoPanel.tsx` `Transaction` with `isSponsored` for paymaster-backed gasless UX on Base.
 - **Storage**:
-  - Pinata SDK (IPFS) for photo blobs (CIDv1 base32).
-  - Postgres for relational data (users, photos, indices).
-  - ORM: Prisma or Drizzle (migration + schema management).
+  - Pinata SDK (IPFS) for photo content (CIDv1 base32).
 - **Location handling**:
-  - Persist only blurred location: center lat/lon + radius (500–1000m) and/or geohash (precision 6–7).
-  - Derive `location_label` via Mapbox Geocoding API (neighborhood/city) for display.
-- **Weather/Score**:
-  - Brightsky (https://brightsky.dev/) as the weather/astronomy data source.
-  - OpenAI API to compute or validate the sunset beauty score using weather features/context.
+  - Client persists only blurred/rounded coordinates on the client side for display.
 - **Security**:
-  - Rate limiting per IP/address.
-  - Strict CORS; only allow app origin.
-  - Secrets in environment variables (Pinata JWT, Mapbox token, OpenAI key).
-  - Replay protection with nonces and deadlines; uniqueness on `file_hash`.
-- **Observability**:
-  - Structured logs for claim verification, Pinata uploads, Brightsky/Mapbox calls.
-  - Basic metrics: uploads/day, claim success rate, latency, dedup collisions.
+  - Secrets in environment variables (Pinata JWT, Mapbox token).
 
-## Database (Postgres)
-- **Provider**: Supabase (hosted Postgres)
-- **Tables**: `users`, `photos`.
-- **Indices**:
-  - `photos(file_hash)` unique.
-  - `photos(address, timestamp_sec desc)` for galleries.
-  - `photos(location_geohash)` for spatial bucketing (optional).
-- **Access**: Supabase JS client (server-side) for SQL or RPC; optional ORM (Drizzle) for schema/migrations.
-- **Migrations**: Drizzle or Supabase SQL migrations.
+## Database
+- Not used at the moment.
 
 ## Hosting/Infra
-- **Deployment**: Vercel (first-class for Next.js). HTTPS for PWA service worker.
-- **Database**: Supabase (Postgres) as primary DB.
+- **Deployment**: Vercel (first-class for Next.js).
 - **IPFS**: Pinata for pinning and gateway.
 
-## Optional: Secondary Native Client (React Native)
-- If we add native apps later:
-  - **Platform**: React Native (Expo).
-  - **Wallet**: Coinbase Smart Wallet via WalletConnect or native SDK.
-  - **Maps**: `@rnmapbox/maps`.
-  - **Media/Hashing**: `expo-image-picker`, `expo-crypto`.
-
 ## Mapbox specifics
-- **Rendering**: Mapbox GL JS with clustering for dense areas.
-- **Privacy**: never render raw precise GPS; use blurred center + radius and neighborhood label.
-- **Cost control**: cache reverse geocoding results; debounce map updates.
+- **Rendering**: Mapbox GL JS.
+- **Privacy**: prefer blurred/rounded presentation of coordinates.
 
 ## Third-party keys
 - **Mapbox**: public token in client; rotate if leaked.
-- **OpenAI**: server-side only; never expose in client.
 - **Pinata**: server-side JWT only.
-
-## Future considerations
-- Native app wrapper (Capacitor/Ionic/React Native Web) if we want app-store presence.
-- Optional on-chain anchoring later using the same EIP-712 claim format.
-- Paymasters/session keys if we later add on-chain actions while keeping UX gasless.
+- **OpenAI**: server-side only; API key required for `/api/sunset-analyze`.
