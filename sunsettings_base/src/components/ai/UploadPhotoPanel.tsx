@@ -355,6 +355,10 @@ export default function UploadPhotoPanel({
                       setLocationMismatch(mismatchNow);
                       onLocationMismatchChange?.(mismatchNow);
                       if (mismatchNow) {
+                        // Provide clear feedback to the user when location doesn't match
+                        setGeoError(
+                          "Your current location doesn't match the selected spot. Move closer to the target location and try again."
+                        );
                         return; // Do not open the camera
                       }
                     }
