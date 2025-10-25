@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3";
+import { getPreferredLocation } from "@/lib/location";
 
 export default function UploadPhotoPanel({
   locationLabel,
@@ -239,7 +240,125 @@ export default function UploadPhotoPanel({
     } catch {}
   }, []);
 
-  // Removed pre-capture detectLocation button and handler
+  async function detectLocation() {
+    if (gpsFix) return;
+    if (geoLockRef.current) return;
+    geoLockRef.current = true;
+    setGpsError(null);
+    setGpsFixing(true);
+    try {
+      const pref = await getPreferredLocation();
+      const lat = pref.lat;
+      const lon = pref.lon;
+      const accuracy = undefined;
+      const fixAtIso = new Date().toISOString();
+      setGpsFix({ lat, lon, accuracy, fixAtIso });
+      // Immediately set H3/center and resolve label for map & metadata
+      try {
+        const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+        const center = centerOf(h3);
+        setPhotoH3Index(h3);
+        setPhotoCellCenter(center);
+        if (pref.source === "ip") {
+          setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
+        }
+        // Evaluate location mismatch at a coarse H3 resolution (state/region scale)
+        try {
+          const COARSE_RES = 4;
+          const analysisLat = coords?.lat;
+          const analysisLon = coords?.lon;
+          if (
+            typeof analysisLat === "number" &&
+            typeof analysisLon === "number"
+          ) {
+            const a = toH3(analysisLat, analysisLon, COARSE_RES);
+            const p = toH3(lat, lon, COARSE_RES);
+            const mismatchNow = a !== p;
+            setLocationMismatch(mismatchNow);
+            onLocationMismatchChange?.(mismatchNow);
+          } else {
+            setLocationMismatch(false);
+            onLocationMismatchChange?.(false);
+          }
+        } catch {
+          setLocationMismatch(false);
+          onLocationMismatchChange?.(false);
+        }
+        setLabelLoading(true);
+        try {
+          const res = await fetch("/api/geocode/reverse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: center.lat, lon: center.lon }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setPhotoLocationLabel(
+              typeof data?.label === "string" && data.label.trim().length
+                ? data.label
+                : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`
+            );
+          } else {
+            setPhotoLocationLabel(
+              `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`
+            );
+          }
+        } finally {
+          setLabelLoading(false);
+        }
+      } catch {
+        // if H3 fails for any reason, still provide a fallback label from raw lat/lon
+        setPhotoLocationLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      }
+    } catch (e) {
+      const msg = (e as GeolocationPositionError)?.message || (e as Error)?.message || "Location failed";
+      setGpsError(msg);
+      const code = (e as GeoErr)?.code;
+      if (code === 1 || /denied/i.test(String(msg))) {
+        try { sessionStorage.setItem("geo_denied", "1"); } catch {}
+        setGeoDenied(true);
+        // Try IP fallback
+        try {
+          const res = await fetch("/api/geo/ip", { cache: "no-store" });
+          if (res.ok) {
+            const j = await res.json();
+            const lat = Number(j?.lat);
+            const lon = Number(j?.lon);
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+              try {
+                const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+                const center = centerOf(h3);
+                setPhotoH3Index(h3);
+                setPhotoCellCenter(center);
+                const label = typeof j?.label === "string" && j.label.trim().length
+                  ? j.label
+                  : `${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;
+                setPhotoLocationLabel(label);
+                try {
+                  window.dispatchEvent(
+                    new CustomEvent("sunsettings:photoPreview", {
+                      detail: {
+                        lat: center.lat,
+                        lon: center.lon,
+                        locationLabel: label,
+                        takenAtIso: takenAtIso ?? null,
+                        previewUrl: previewUrl || null,
+                      },
+                    })
+                  );
+                } catch {}
+                setGpsError("Using coarse IP-based location (enable Location in Settings for precision)");
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+      setGpsFix(null);
+    } finally {
+      setGpsFixing(false);
+      geoLockRef.current = false;
+    }
+  }
 
   // File input change handler (hoisted)
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -486,21 +605,9 @@ export default function UploadPhotoPanel({
                         } catch {}
                         setGeoLoading(true);
                         try {
-                          const pos = await new Promise<GeolocationPosition>(
-                            (resolve, reject) => {
-                              navigator.geolocation.getCurrentPosition(
-                                resolve,
-                                reject,
-                                {
-                                  enableHighAccuracy: true,
-                                  timeout: 10000,
-                                  maximumAge: 0,
-                                }
-                              );
-                            }
-                          );
-                          const lat = pos.coords.latitude;
-                          const lon = pos.coords.longitude;
+                          const pref = await getPreferredLocation();
+                          const lat = pref.lat;
+                          const lon = pref.lon;
                           const h3 = toH3(lat, lon, DEFAULT_H3_RES);
                           const center = centerOf(h3);
                           setPhotoH3Index(h3);
