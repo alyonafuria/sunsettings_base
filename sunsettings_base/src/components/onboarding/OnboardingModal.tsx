@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 
 export type OnboardingModalProps = {
   open: boolean;
@@ -14,7 +13,6 @@ export type OnboardingModalProps = {
 // Typography and controls now use shared UI components
 
 export default function OnboardingModal({ open, onOpenChange, onOpenUpload }: OnboardingModalProps) {
-  const router = useRouter();
 
   type Step = {
     key: string;
@@ -64,7 +62,7 @@ export default function OnboardingModal({ open, onOpenChange, onOpenUpload }: On
         body: "You are ready to become a sunset catcher!",
       },
     ],
-    [onOpenUpload, router]
+    [onOpenUpload]
   );
 
   const [pageIndex, setPageIndex] = React.useState(0);
@@ -72,7 +70,6 @@ export default function OnboardingModal({ open, onOpenChange, onOpenUpload }: On
   const isLast = pageIndex === steps.length - 1;
   const step = steps[pageIndex];
 
-  const close = () => onOpenChange(false);
   const complete = () => onOpenChange(false);
 
   // allow global event to open onboarding
