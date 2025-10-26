@@ -11,6 +11,7 @@ import { HelpCircle } from "lucide-react";
 import {
   Transaction,
   TransactionButton,
+  TransactionSponsor,
   TransactionToast,
   TransactionToastIcon,
   TransactionToastLabel,
@@ -633,6 +634,7 @@ export default function UploadPhotoPanel({
                         className="mt-0 mr-auto ml-auto w-full border-2 border-black"
                         text="Mint (gas covered)"
                       />
+                      <TransactionSponsor />
                       <TransactionToast>
                         <TransactionToastIcon />
                         <TransactionToastLabel />
