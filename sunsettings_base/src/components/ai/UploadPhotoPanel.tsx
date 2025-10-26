@@ -134,7 +134,26 @@ export default function UploadPhotoPanel({
     } catch {
       // ignore
     }
-  }, [gpsFix, coords?.lat, coords?.lon, locationMismatch, onLocationMismatchChange]);
+  }, [
+    gpsFix,
+    coords?.lat,
+    coords?.lon,
+    locationMismatch,
+    onLocationMismatchChange,
+  ]);
+
+  // If a photo was selected and we detect a mismatch, clear the selection and show an error
+  React.useEffect(() => {
+    if (file && locationMismatch) {
+      setError(
+        "Your current location doesn't match the analyzed area. Please move closer to the map location and retake the photo."
+      );
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [file, locationMismatch, previewUrl]);
 
   const closePanel = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -262,7 +281,8 @@ export default function UploadPhotoPanel({
           type="file"
           accept="image/*"
           capture="environment"
-          className="hidden"
+          // Use visually hidden instead of display:none to satisfy iOS Safari requirements
+          className="sr-only"
           onChange={onFileChange}
         />
         <div className="w-full flex flex-col items-center gap-2 mx-auto">
@@ -270,62 +290,72 @@ export default function UploadPhotoPanel({
             <Button
               type="button"
               variant="neutral"
-              onClick={async () => {
+              onClick={() => {
+                // Option A: open the camera immediately on user gesture
+                setError(null);
                 setGeoError(null);
+                onOpenPicker?.();
+                setCaptureTimestamp(new Date().toISOString());
+                fileInputRef.current?.click();
+                // Start geolocation in the background; do not block camera open
+                if (!navigator.geolocation) return;
                 setGeoLoading(true);
-                try {
-                  if (!navigator.geolocation) {
-                    throw new Error("Geolocation not available");
-                  }
-                  const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                      enableHighAccuracy: true,
-                      timeout: 10000,
-                      maximumAge: 0,
-                    });
-                  });
-                  const lat = pos.coords.latitude;
-                  const lon = pos.coords.longitude;
-                  const accuracy = pos.coords.accuracy;
-                  const fixAtIso = new Date().toISOString();
-                  // Compare with analysis coords at a coarse H3 resolution
+                (async () => {
                   try {
-                    const COARSE_RES = 4;
-                    const analysisLat = coords?.lat;
-                    const analysisLon = coords?.lon;
-                    if (typeof analysisLat === "number" && typeof analysisLon === "number") {
-                      const a = toH3(analysisLat, analysisLon, COARSE_RES);
-                      const p = toH3(lat, lon, COARSE_RES);
-                      const mismatchNow = a !== p;
-                      setLocationMismatch(mismatchNow);
-                      onLocationMismatchChange?.(mismatchNow);
-                      if (mismatchNow) {
-                        return; // Do not open the camera
+                    const pos = await new Promise<GeolocationPosition>(
+                      (resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(
+                          resolve,
+                          reject,
+                          {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0,
+                          }
+                        );
                       }
-                    }
-                  } catch {}
-                  // Set gps fix for metadata/prehash and optionally precompute photo cell
-                  setGpsFix({ lat, lon, accuracy, fixAtIso });
-                  try {
-                    const h3 = toH3(lat, lon, DEFAULT_H3_RES);
-                    const center = centerOf(h3);
-                    setPhotoH3Index(h3);
-                    setPhotoCellCenter(center);
-                  } catch {}
-                  // Proceed to open camera
-                  onOpenPicker?.();
-                  setCaptureTimestamp(new Date().toISOString());
-                  fileInputRef.current?.click();
-                } catch (e) {
-                  const msg = (e as GeolocationPositionError | Error)?.message || "Failed to get location";
-                  setGeoError(msg);
-                } finally {
-                  setGeoLoading(false);
-                }
+                    );
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    const accuracy = pos.coords.accuracy;
+                    const fixAtIso = new Date().toISOString();
+                    // Set gps fix for metadata/prehash and optionally precompute photo cell
+                    setGpsFix({ lat, lon, accuracy, fixAtIso });
+                    try {
+                      const h3 = toH3(lat, lon, DEFAULT_H3_RES);
+                      const center = centerOf(h3);
+                      setPhotoH3Index(h3);
+                      setPhotoCellCenter(center);
+                    } catch {}
+                    // Update mismatch status (non-blocking)
+                    try {
+                      const COARSE_RES = 4;
+                      const analysisLat = coords?.lat;
+                      const analysisLon = coords?.lon;
+                      if (
+                        typeof analysisLat === "number" &&
+                        typeof analysisLon === "number"
+                      ) {
+                        const a = toH3(analysisLat, analysisLon, COARSE_RES);
+                        const p = toH3(lat, lon, COARSE_RES);
+                        const mismatchNow = a !== p;
+                        setLocationMismatch(mismatchNow);
+                        onLocationMismatchChange?.(mismatchNow);
+                      }
+                    } catch {}
+                  } catch (e) {
+                    setGeoError(
+                      (e as GeolocationPositionError | Error)?.message ||
+                        "Failed to get location"
+                    );
+                  } finally {
+                    setGeoLoading(false);
+                  }
+                })();
               }}
-              disabled={uploading || geoLoading}
+              disabled={uploading}
             >
-              <span>{geoLoading ? "Locating…" : "Take photo"}</span>
+              <span>Take photo</span>
             </Button>
           </div>
           {geoError && <div className="text-xs text-center">{geoError}</div>}
@@ -656,6 +686,9 @@ export default function UploadPhotoPanel({
                       disabled={
                         !file ||
                         uploading ||
+                        // Require location determined (gpsFix or photoH3Index) and no mismatch
+                        (!photoH3Index && !gpsFix) ||
+                        locationMismatch ||
                         (typeof scorePercent === "number"
                           ? userScore === null
                           : false)
@@ -916,10 +949,10 @@ export default function UploadPhotoPanel({
         } catch {}
       }
       // Do not revoke previewUrl: map markers may still reference the blob URL. It will be GC'd when page unloads.
-  setPreviewUrl(null);
-  setFile(null);
-  setDisagree(false);
-  setUserScore(null);
+      setPreviewUrl(null);
+      setFile(null);
+      setDisagree(false);
+      setUserScore(null);
     } catch (e) {
       setError((e as Error)?.message || "Upload failed");
     } finally {
