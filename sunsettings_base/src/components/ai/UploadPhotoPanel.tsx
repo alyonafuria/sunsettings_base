@@ -11,9 +11,10 @@ import { HelpCircle } from "lucide-react";
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
+  TransactionToast,
+  TransactionToastIcon,
+  TransactionToastLabel,
+  TransactionToastAction,
 } from "@coinbase/onchainkit/transaction";
 import {
   AlertDialog,
@@ -52,6 +53,7 @@ export default function UploadPhotoPanel({
   onLocationMismatchChange?: (mismatch: boolean) => void;
 }) {
   const { address: connectedAddress, isConnected } = useAccount();
+  // Force Base mainnet for minting and explorer links
   const currentChainId = 8453;
   const { connectors, connectAsync, status: connectStatus } = useConnect();
   const connectCoinbase = async () => {
@@ -631,10 +633,11 @@ export default function UploadPhotoPanel({
                         className="mt-0 mr-auto ml-auto w-full border-2 border-black"
                         text="Mint (gas covered)"
                       />
-                      <TransactionStatus>
-                        <TransactionStatusLabel />
-                        <TransactionStatusAction />
-                      </TransactionStatus>
+                      <TransactionToast>
+                        <TransactionToastIcon />
+                        <TransactionToastLabel />
+                        <TransactionToastAction />
+                      </TransactionToast>
                     </Transaction>
                   );
                 })()}
