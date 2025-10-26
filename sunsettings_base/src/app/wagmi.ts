@@ -1,6 +1,6 @@
 // @noErrors: 2554
 import { http, cookieStorage, createConfig, createStorage } from "wagmi";
-import { base } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
 import { coinbaseWallet, injected, metaMask } from "wagmi/connectors";
 
 // const projectID = process.env.NEXT_PUBLIC_PROJECT_ID; // unused
@@ -14,6 +14,13 @@ export function getConfig() {
         appName: "Sunsettings",
         preference: "smartWalletOnly",
         version: "4",
+        // Provide Paymaster URLs for sponsored transactions
+        paymasterUrls: {
+          [base.id]: process.env
+            .NEXT_PUBLIC_PAYMASTER_AND_BUNDLER_ENDPOINT as string,
+          [baseSepolia.id]: process.env
+            .NEXT_PUBLIC_PAYMASTER_AND_BUNDLER_SEPOLIA_ENDPOINT as string,
+        },
       }),
       metaMask({
         dappMetadata: {
