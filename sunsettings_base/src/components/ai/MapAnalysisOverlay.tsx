@@ -322,6 +322,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
       summary: string;
       sunsetUtc: string | null;
       sunsetLocal: string | null;
+      sunsetLocalDate: string | null;
+      nowLocalYmd: string | null;
     }> => {
       try {
         const res = await fetch(
@@ -330,7 +332,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           )}`,
           { cache: "no-store" }
         );
-        if (!res.ok) return { summary: "", sunsetUtc: null, sunsetLocal: null };
+        if (!res.ok) return { summary: "", sunsetUtc: null, sunsetLocal: null, sunsetLocalDate: null, nowLocalYmd: null };
         const data = await res.json().catch(() => null);
         const ws =
           typeof data?.weatherSummary === "string" ? data.weatherSummary : "";
@@ -338,9 +340,13 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           typeof data?.sunsetUtc === "string" ? data.sunsetUtc : null;
         const sunsetLocal =
           typeof data?.sunsetLocal === "string" ? data.sunsetLocal : null;
-        return { summary: ws, sunsetUtc, sunsetLocal };
+        const sunsetLocalDate =
+          typeof data?.sunsetLocalDate === "string" ? data.sunsetLocalDate : null;
+        const nowLocalYmd =
+          typeof data?.nowLocalYmd === "string" ? data.nowLocalYmd : null;
+        return { summary: ws, sunsetUtc, sunsetLocal, sunsetLocalDate, nowLocalYmd };
       } catch {
-        return { summary: "", sunsetUtc: null, sunsetLocal: null };
+        return { summary: "", sunsetUtc: null, sunsetLocal: null, sunsetLocalDate: null, nowLocalYmd: null };
       }
     },
     []
@@ -389,6 +395,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           );
           const weatherSummary = wf.summary;
           setSunsetText(wf.sunsetLocal || "");
+          let shouldAnalyze = true;
+          let pastCutoff = false;
           if (wf.sunsetUtc) {
             try {
               const nowMs = Date.now();
@@ -396,6 +404,18 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
               const cutoffMs = Number.isFinite(sunMs)
                 ? sunMs + 60 * 60 * 1000
                 : NaN;
+              try {
+                console.log('[analysis] decision', {
+                  sunsetUtc: wf.sunsetUtc,
+                  sunsetLocal: wf.sunsetLocal,
+                  nowMs,
+                  nowIso: new Date(nowMs).toISOString(),
+                  sunMs,
+                  cutoffMs,
+                  cutoffIso: Number.isFinite(cutoffMs) ? new Date(cutoffMs).toISOString() : null,
+                  comparison: Number.isFinite(cutoffMs) ? (nowMs > cutoffMs ? 'now>cutoff -> skip' : 'now<=cutoff -> run') : 'invalid cutoff',
+                })
+              } catch {}
               if (Number.isFinite(cutoffMs) && nowMs > cutoffMs) {
                 if (!cancelled) {
                   // Mark that it's past sunset, but continue to analyze and show a prediction
@@ -404,6 +424,17 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
                   setDescription(
                     "you missed sunset today, go to sleep and try tomorrow"
                   );
+                  shouldAnalyze = false;
+                  pastCutoff = true;
+                  try {
+                    console.log('[analysis] skipped', {
+                      reason: 'past cutoff',
+                      sunsetUtc: wf.sunsetUtc,
+                      sunsetLocal: wf.sunsetLocal,
+                      nowIso: new Date(nowMs).toISOString(),
+                      cutoffIso: new Date(cutoffMs).toISOString(),
+                    })
+                  } catch {}
                 }
               } else {
                 setIsPastSunset(false);
@@ -412,23 +443,39 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           } else {
             setIsPastSunset(false);
           }
-          const res = await fetch("/api/sunset-analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: locationLabelRef.current || "Unknown",
-              weatherSummary,
-              seed: Math.floor(Math.random() * 1_000_000),
-            }),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = (await res.json()) as {
-            ok?: boolean;
-            result?: { probability: number | null; description: string };
-          };
-          if (!cancelled && data?.result) {
-            setProbability(data.result.probability ?? null);
-            setDescription(data.result.description ?? "");
+          // If not past cutoff, but local date mismatches, treat as past sunset for UX simplicity
+          if (!pastCutoff && wf.sunsetLocalDate && wf.nowLocalYmd && wf.nowLocalYmd !== wf.sunsetLocalDate) {
+            try {
+              console.log('[analysis] date-mismatch -> treat as past', {
+                nowLocalYmd: wf.nowLocalYmd,
+                sunsetLocalDate: wf.sunsetLocalDate,
+                decision: 'unified past-sunset UX',
+              })
+            } catch {}
+            setIsPastSunset(true);
+            setDescription("you missed sunset today, go to sleep and try tomorrow");
+            shouldAnalyze = false;
+          }
+          if (shouldAnalyze) {
+            try { console.log('[analysis] proceeding', { reason: 'before cutoff or no sunset known' }) } catch {}
+            const res = await fetch("/api/sunset-analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: locationLabelRef.current || "Unknown",
+                weatherSummary,
+                seed: Math.floor(Math.random() * 1_000_000),
+              }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = (await res.json()) as {
+              ok?: boolean;
+              result?: { probability: number | null; description: string };
+            };
+            if (!cancelled && data?.result) {
+              setProbability(data.result.probability ?? null);
+              setDescription(data.result.description ?? "");
+            }
           }
         } catch (e) {
           if (!cancelled)
@@ -549,36 +596,39 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
               forceClosed={cardForceClosed}
               closeSignal={cardCloseSignal}
               sunsetText={sunsetText}
+              isPastSunset={isPastSunset}
             />
-            <UploadPhotoPanel
-              locationLabel={locationLabel}
-              coords={{ lat: latNum, lon: lonNum }}
-              onLocationMismatchChange={setLocationMismatch}
-              scoreLabel={(function () {
-                const p = typeof probability === "number" ? probability : null;
-                if (p === null) return undefined;
-                if (p <= 30) return "Horrible";
-                if (p <= 50) return "Poor";
-                if (p <= 70) return "Okay";
-                if (p <= 90) return "Great";
-                return "Fabulous";
-              })()}
-              scorePercent={
-                typeof probability === "number" ? probability : undefined
-              }
-              onOpenPicker={() => {
-                setCardForceClosed(true);
-              }}
-              onUploadingChange={(u) => {
-                if (u) setCardForceClosed(true);
-              }}
-              onUploaded={() => setCardForceClosed(true)}
-              onReset={() => setCardForceClosed(false)}
-              onCloseRequested={() => {
-                setCardForceClosed(false);
-                setCardCloseSignal((n) => n + 1);
-              }}
-            />
+            {!isPastSunset && (
+              <UploadPhotoPanel
+                locationLabel={locationLabel}
+                coords={{ lat: latNum, lon: lonNum }}
+                onLocationMismatchChange={setLocationMismatch}
+                scoreLabel={(function () {
+                  const p = typeof probability === "number" ? probability : null;
+                  if (p === null) return undefined;
+                  if (p <= 30) return "Horrible";
+                  if (p <= 50) return "Poor";
+                  if (p <= 70) return "Okay";
+                  if (p <= 90) return "Great";
+                  return "Fabulous";
+                })()}
+                scorePercent={
+                  typeof probability === "number" ? probability : undefined
+                }
+                onOpenPicker={() => {
+                  setCardForceClosed(true);
+                }}
+                onUploadingChange={(u) => {
+                  if (u) setCardForceClosed(true);
+                }}
+                onUploaded={() => setCardForceClosed(true)}
+                onReset={() => setCardForceClosed(false)}
+                onCloseRequested={() => {
+                  setCardForceClosed(false);
+                  setCardCloseSignal((n) => n + 1);
+                }}
+              />
+            )}
           </>
         )}
       </div>

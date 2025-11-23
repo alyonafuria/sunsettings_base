@@ -14,6 +14,7 @@ export interface FlipCardProps {
   forceClosed?: boolean
   closeSignal?: number
   sunsetText?: string
+  isPastSunset?: boolean
 }
 
 export default function FlipCard({
@@ -26,6 +27,7 @@ export default function FlipCard({
   forceClosed,
   closeSignal,
   sunsetText,
+  isPastSunset,
 }: FlipCardProps) {
   const [isFlipped, setIsFlipped] = React.useState(false)
   const [isClosed, setIsClosed] = React.useState(false)
@@ -126,7 +128,7 @@ export default function FlipCard({
         {/* Front */}
         <div style={{ ...faceStyle, pointerEvents: isFlipped ? "none" : undefined }}>
           <Card className="relative w-full h-full px-5 py-6 flex flex-col justify-center items-center">
-            {!isClosed && !isFlipped && (
+            {!isClosed && !isFlipped && !isPastSunset && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -141,39 +143,57 @@ export default function FlipCard({
             )}
             <div className="text-center">
               {isClosed ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-lg md:text-xl font-bold mb-1">Sunset</div>
-                  <div className="text-5xl font-extrabold">
-                    {shownProb}
+                isPastSunset ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 leading-snug px-2">
+                      <div>you missed sunset today.</div>
+                      <div>go to sleep and try again tomorrow</div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="text-lg md:text-xl font-bold mb-1">Sunset</div>
+                    <div className="text-5xl font-extrabold">
+                      {shownProb}
+                    </div>
+                  </div>
+                )
               ) : (
                 showContent ? (
                   <>
-                    {sunsetText && (
-                      <div className="text-[11px] opacity-70 mb-0.5">Sunset: {sunsetText}</div>
-                    )}
-                    <div className="text-[13px] font-medium mb-1 opacity-90 leading-snug">Today in {location || "—"}</div>
-                    <div className="text-2xl font-bold mb-1 leading-tight">Sunset Beauty</div>
-                    <div className="relative">
-                      <div className="text-5xl font-extrabold leading-none">
-                        {shownProb}
+                    {isPastSunset ? (
+                      <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 leading-snug px-2">
+                        <div>you missed sunset today.</div>
+                        <div>go to sleep and try again tomorrow</div>
                       </div>
-                    </div>
-                    <div className="mt-0.5 text-[13px] font-medium opacity-85 leading-snug">
-                      {(function(){
-                        if (typeof probability !== 'number') return '—'
-                        const p = probability
-                        if (p <= 30) return 'Horrible'
-                        if (p <= 50) return 'Poor'
-                        if (p <= 70) return 'Okay'
-                        if (p <= 90) return 'Great'
-                        return 'Fabulous'
-                      })()}
-                    </div>
-                    <p className="mt-0.5 text-[12px] opacity-75 leading-snug">{loading ? "Analyzing the sunset…" : "Tap card for details"}</p>
-                    {!loading && typeof probability === "number" && probability === 0 && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">No data</p>
+                    ) : (
+                      <>
+                        {sunsetText && (
+                          <div className="text-[11px] opacity-70 mb-0.5">Sunset: {sunsetText}</div>
+                        )}
+                        <div className="text-[13px] font-medium mb-1 opacity-90 leading-snug">Today in {location || "—"}</div>
+                        <div className="text-2xl font-bold mb-1 leading-tight">Sunset Beauty</div>
+                        <div className="relative">
+                          <div className="text-5xl font-extrabold leading-none">
+                            {shownProb}
+                          </div>
+                        </div>
+                        <div className="mt-0.5 text-[13px] font-medium opacity-85 leading-snug">
+                          {(function(){
+                            if (typeof probability !== 'number') return '—'
+                            const p = probability
+                            if (p <= 30) return 'Horrible'
+                            if (p <= 50) return 'Poor'
+                            if (p <= 70) return 'Okay'
+                            if (p <= 90) return 'Great'
+                            return 'Fabulous'
+                          })()}
+                        </div>
+                        <p className="mt-0.5 text-[12px] opacity-75 leading-snug">{loading ? "Analyzing the sunset…" : "Tap card for details"}</p>
+                        {!loading && typeof probability === "number" && probability === 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">No data</p>
+                        )}
+                      </>
                     )}
                   </>
                 ) : null
@@ -185,7 +205,7 @@ export default function FlipCard({
         {/* Back */}
         <div style={{ ...faceStyle, transform: "rotateY(180deg)", pointerEvents: isFlipped ? undefined : "none" }}>
           <Card className="relative w-full h-full p-6 flex flex-col justify-center">
-            {!isClosed && isFlipped && (
+            {!isClosed && isFlipped && !isPastSunset && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -200,19 +220,33 @@ export default function FlipCard({
             )}
             <div className="text-sm leading-relaxed opacity-95">
               {isClosed ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-sm font-bold mb-1">Details</div>
-                  <div className="text-sm opacity-80">Tap to expand</div>
-                </div>
+                isPastSunset ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-[15px] md:text-lg font-semibold opacity-90 px-2">
+                    <div>you missed sunset today.</div>
+                    <div>go to sleep and try again tomorrow</div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="text-sm font-bold mb-1">Details</div>
+                    <div className="text-sm opacity-80">Tap to expand</div>
+                  </div>
+                )
               ) : (
-                <>
-                  <div className="mb-3 text-lg font-semibold opacity-95">{formattedDate}</div>
-                  {loading && <div className="opacity-90">Fetching description...</div>}
-                  {!loading && error && <span className="text-destructive">{error}</span>}
-                  {!loading && !error && (
-                    <span>{description && description.trim().length > 0 ? description : "No description available."}</span>
-                  )}
-                </>
+                isPastSunset ? (
+                  <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 px-2">
+                    <div>you missed sunset today.</div>
+                    <div>go to sleep and try again tomorrow</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 text-lg font-semibold opacity-95">{formattedDate}</div>
+                    {loading && <div className="opacity-90">Fetching description...</div>}
+                    {!loading && error && <span className="text-destructive">{error}</span>}
+                    {!loading && !error && (
+                      <span>{description && description.trim().length > 0 ? description : "No description available."}</span>
+                    )}
+                  </>
+                )
               )}
             </div>
           </Card>
