@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 import { createPublicClient, http, type Address, type Abi } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
