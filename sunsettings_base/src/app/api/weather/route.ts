@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 // Simple in-memory TTL cache for server-side
 // Key by rounded lat/lon (0.05°) + date (YYYY-MM-DD)
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-type CachedWeather = { summary: string; sunsetUtc: string | null; sunsetLocal: string | null }
+type CachedWeather = { summary: string; sunsetUtc: string | null; sunsetLocal: string | null; sunsetLocalDate?: string | null; nowLocalYmd?: string | null }
 const memCache = new Map<string, { value: CachedWeather; expires: number }>()
 
 function roundCoord(x: number, step = 0.05): number {
@@ -39,17 +39,17 @@ export async function GET(req: Request) {
     const now = Date.now()
     const cached = memCache.get(cacheKey)
     if (cached && cached.expires > now) {
-      return NextResponse.json({ ok: true, weatherSummary: cached.value.summary, sunsetUtc: cached.value.sunsetUtc, sunsetLocal: cached.value.sunsetLocal, cached: true })
+      return NextResponse.json({ ok: true, weatherSummary: cached.value.summary, sunsetUtc: cached.value.sunsetUtc, sunsetLocal: cached.value.sunsetLocal, sunsetLocalDate: cached.value.sunsetLocalDate ?? null, nowLocalYmd: cached.value.nowLocalYmd ?? null, cached: true })
     }
 
     const [summary, sunset] = await Promise.all([
       getWeatherSummary(lat, lon, date),
-      getSunsetAuto(lat, lon, ymd).catch(() => ({ utc: null as string | null, local: null as string | null })),
+      getSunsetAuto(lat, lon, ymd).catch(() => ({ utc: null as string | null, local: null as string | null, localDate: null as string | null, nowLocalYmd: null as string | null })),
     ])
 
-    memCache.set(cacheKey, { value: { summary, sunsetUtc: sunset.utc, sunsetLocal: sunset.local }, expires: now + CACHE_TTL_MS })
+    memCache.set(cacheKey, { value: { summary, sunsetUtc: sunset.utc, sunsetLocal: sunset.local, sunsetLocalDate: sunset.localDate ?? null, nowLocalYmd: sunset.nowLocalYmd ?? null }, expires: now + CACHE_TTL_MS })
 
-    return NextResponse.json({ ok: true, weatherSummary: summary, sunsetUtc: sunset.utc, sunsetLocal: sunset.local, cached: false })
+    return NextResponse.json({ ok: true, weatherSummary: summary, sunsetUtc: sunset.utc, sunsetLocal: sunset.local, sunsetLocalDate: sunset.localDate ?? null, nowLocalYmd: sunset.nowLocalYmd ?? null, cached: false })
   } catch (e) {
     return NextResponse.json({ error: (e as Error)?.message || "Unknown error" }, { status: 500 })
   }
@@ -61,24 +61,24 @@ type OpenMeteoSunset = {
   utc_offset_seconds?: number
 }
 
-async function getSunsetAuto(lat: number, lon: number, ymd: string): Promise<{ utc: string | null; local: string | null }> {
+async function getSunsetAuto(lat: number, lon: number, ymd: string): Promise<{ utc: string | null; local: string | null; localDate: string | null; nowLocalYmd: string | null }> {
   // Ask Open-Meteo to compute daily sunset in the LOCATION's local timezone
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&daily=sunset&timezone=auto&start_date=${ymd}&end_date=${ymd}`
   const res = await fetch(url)
-  if (!res.ok) return { utc: null, local: null }
+  if (!res.ok) return { utc: null, local: null, localDate: null, nowLocalYmd: null }
   const json = (await res.json().catch(() => null)) as unknown as OpenMeteoSunset | null
-  if (!json) return { utc: null, local: null }
+  if (!json) return { utc: null, local: null, localDate: null, nowLocalYmd: null }
   const times = json.daily?.sunset
   const timeStr = Array.isArray(times) && typeof times[0] === 'string' ? times[0] : null
   const offsetSec = typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0
-  if (!timeStr) return { utc: null, local: null }
+  if (!timeStr) return { utc: null, local: null, localDate: null, nowLocalYmd: null }
   // Open-Meteo returns local time like 'YYYY-MM-DDTHH:MM'
   // Convert to UTC by subtracting offset
   try {
     // timeStr format: YYYY-MM-DDTHH:MM (local time at location)
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(timeStr)
-    if (!m) return { utc: null, local: null }
+    if (!m) return { utc: null, local: null, localDate: null, nowLocalYmd: null }
     const y = parseInt(m[1], 10)
     const mo = parseInt(m[2], 10)
     const d = parseInt(m[3], 10)
@@ -89,8 +89,33 @@ async function getSunsetAuto(lat: number, lon: number, ymd: string): Promise<{ u
     const utcMs = localMs - (offsetSec * 1000)
     const utcIso = new Date(utcMs).toISOString()
     const hhmm = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`
-    return { utc: utcIso, local: hhmm }
+    // Compute current time at the chosen location using offset
+    const nowUtcMs = Date.now()
+    const nowUtcIso = new Date(nowUtcMs).toISOString()
+    const nowLocalMs = nowUtcMs + (offsetSec * 1000)
+    const nowLocalDate = new Date(nowLocalMs)
+    const nowLocal = `${String(nowLocalDate.getUTCHours()).padStart(2,'0')}:${String(nowLocalDate.getUTCMinutes()).padStart(2,'0')}`
+    const nowLocalYmd = nowLocalDate.toISOString().slice(0, 10)
+    try {
+      console.log('[sunset] parse-debug', {
+        lat,
+        lon,
+        date: ymd,
+        timeStr,
+        offsetSec,
+        parts: { y, mo, d, hh, mm },
+        localMs,
+        utcMs,
+        utcIso,
+        local: hhmm,
+        nowUtcIso,
+        nowLocalYmd,
+        nowLocal,
+        nowLocalMs,
+      })
+    } catch {}
+    return { utc: utcIso, local: hhmm, localDate: `${String(y)}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`, nowLocalYmd }
   } catch {
-    return { utc: null, local: null }
+    return { utc: null, local: null, localDate: null, nowLocalYmd: null }
   }
 }

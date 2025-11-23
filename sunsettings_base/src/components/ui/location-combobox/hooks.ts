@@ -4,6 +4,7 @@ import * as React from "react"
 import type { Option } from "./types"
 import { reverseGeocode } from "./geocode"
 import { searchPlaces, buildAcceptLanguage } from "@/lib/nominatim"
+import { getPreferredLocation } from "@/lib/location"
 
 export function useLocationCombobox({
   options,
@@ -65,54 +66,40 @@ export function useLocationCombobox({
     } catch {}
   }, [onChange, onResolveCoords])
 
-  // Explicit detection
+  // Explicit detection (Base-aware)
   const runDetection = React.useCallback(() => {
-    if (!("geolocation" in navigator)) {
-      return
-    }
     setDetectLoading(true)
     setError(null)
     const controller = new AbortController()
-    // Allow more time for reverse geocoding to respond over the network
     const t = setTimeout(() => controller.abort(), 12000)
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords
-          const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
-          const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
+    ;(async () => {
+      try {
+        const pref = await getPreferredLocation()
+        const latitude = pref.lat
+        const longitude = pref.lon
+        const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
+        const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
 
-          setLastPicked({ value: detectedValue, label })
-          // Force-update to the newly detected value so the trigger reflects it immediately
-          setCurrentValue(detectedValue)
-          setInternalValue(detectedValue)
-          onChange?.(detectedValue)
-          // Inform listeners of detected coordinates
-          try { onDetectedCoords?.(latitude, longitude) } catch {}
-          // persist for refresh and immediate display consistency
-          try {
-            localStorage.setItem(
-              "locationCache",
-              JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
-            )
-          } catch {}
-          // close popover to reveal updated selection on the trigger (defer to next tick)
-          setTimeout(() => setOpen(false), 0)
-        } catch (e: unknown) {
-          if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
-          else setError((e as Error)?.message || "Failed to detect location")
-        } finally {
-          clearTimeout(t)
-          setDetectLoading(false)
-        }
-      },
-      (err) => {
-        setError(err.message || "Location permission denied")
+        setLastPicked({ value: detectedValue, label })
+        setCurrentValue(detectedValue)
+        setInternalValue(detectedValue)
+        onChange?.(detectedValue)
+        try { onDetectedCoords?.(latitude, longitude) } catch {}
+        try {
+          localStorage.setItem(
+            "locationCache",
+            JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
+          )
+        } catch {}
+        setTimeout(() => setOpen(false), 0)
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
+        else setError((e as Error)?.message || "Failed to detect location")
+      } finally {
+        clearTimeout(t)
         setDetectLoading(false)
-      },
-      // Give the browser more time to resolve the current position
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 30 * 60 * 1000 },
-    )
+      }
+    })()
   }, [onChange, onDetectedCoords])
 
   const selected =

@@ -29,9 +29,7 @@ export function getConfig() {
       }),
       injected(),
     ],
-    storage: createStorage({
-      storage: cookieStorage,
-    }),
+    storage: createStorage({ storage: cookieStorage, key: "wagmi-web" }),
     ssr: true,
     transports: {
       [base.id]: http(),
@@ -39,8 +37,26 @@ export function getConfig() {
   });
 }
 
+// Prefer the Base/Farcaster injected provider when running inside the Mini App.
+// Avoid forcing smart wallets here to prevent Base smart wallet modal from opening.
+export function getMiniAppConfig() {
+  return createConfig({
+    chains: [base],
+    // Only the host (Base App/Farcaster) injected provider
+    connectors: [injected()],
+    // Use a different storage key to avoid reusing prior web connector state
+    storage: createStorage({ storage: cookieStorage, key: "wagmi-miniapp" }),
+    ssr: true,
+    transports: {
+      [base.id]: http(),
+    },
+  });
+}
+
+// (duplicate getMiniAppConfig removed)
+
 declare module "wagmi" {
   interface Register {
-    config: ReturnType<typeof getConfig>;
+    config: ReturnType<typeof getConfig> | ReturnType<typeof getMiniAppConfig>;
   }
 }

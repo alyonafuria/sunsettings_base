@@ -28,7 +28,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { toH3, centerOf, DEFAULT_H3_RES } from "@/lib/h3";
+import { toH3, centerOf, DEFAULT_H3_RES, roughlySameAtCoarse } from "@/lib/h3";
+import { getPreferredLocation } from "@/lib/location";
 
 export default function UploadPhotoPanel({
   locationLabel,
@@ -92,6 +93,39 @@ export default function UploadPhotoPanel({
   // Removed pre-capture detect flow; we still keep gpsFix for compatibility if set elsewhere
   const [geoLoading, setGeoLoading] = React.useState(false);
   const [geoError, setGeoError] = React.useState<string | null>(null);
+  const [geoDenied, setGeoDenied] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return sessionStorage.getItem("geo_denied") === "1";
+    } catch {
+      return false;
+    }
+  });
+  type PermissionQueryResult = { state: PermissionState };
+  type NavigatorWithPermissions = Navigator & {
+    permissions?: {
+      query?: (args: {
+        name: PermissionName;
+      }) => Promise<PermissionQueryResult>;
+    };
+  };
+  type GeoErr = { code?: number; message?: string };
+  const getGeoPermissionState = React.useCallback(async (): Promise<
+    "granted" | "denied" | "prompt" | "unknown"
+  > => {
+    try {
+      const n = navigator as NavigatorWithPermissions;
+      if (!n?.permissions?.query) return "unknown";
+      const res = await n.permissions.query({
+        name: "geolocation" as PermissionName,
+      });
+      const s = res?.state ?? "unknown";
+      if (s === "granted" || s === "denied" || s === "prompt") return s;
+      return "unknown";
+    } catch {
+      return "unknown";
+    }
+  }, []);
   const [deviceId, setDeviceId] = React.useState<string | null>(null);
   const [captureTimestamp, setCaptureTimestamp] = React.useState<string | null>(
     null
@@ -125,9 +159,13 @@ export default function UploadPhotoPanel({
         typeof analysisLat === "number" &&
         typeof analysisLon === "number"
       ) {
-        const a = toH3(analysisLat, analysisLon, COARSE_RES);
-        const p = toH3(gpsFix.lat, gpsFix.lon, COARSE_RES);
-        const mismatchNow = a !== p;
+        const mismatchNow = !roughlySameAtCoarse(
+          analysisLat,
+          analysisLon,
+          gpsFix.lat,
+          gpsFix.lon,
+          COARSE_RES
+        );
         if (mismatchNow !== locationMismatch) {
           setLocationMismatch(mismatchNow);
           onLocationMismatchChange?.(mismatchNow);
@@ -221,8 +259,6 @@ export default function UploadPhotoPanel({
       }
     } catch {}
   }, []);
-
-  // Removed pre-capture detectLocation button and handler
 
   // File input change handler (hoisted)
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -456,23 +492,22 @@ export default function UploadPhotoPanel({
                           setGeoError("Geolocation not available");
                           return;
                         }
+                        // Permissions preflight and session guard
+                        try {
+                          const state = await getGeoPermissionState();
+                          const denied = state === "denied" || geoDenied;
+                          if (denied) {
+                            setGeoError(
+                              "Location permission is blocked. Enable it in device Settings for the Base app and try again."
+                            );
+                            return;
+                          }
+                        } catch {}
                         setGeoLoading(true);
                         try {
-                          const pos = await new Promise<GeolocationPosition>(
-                            (resolve, reject) => {
-                              navigator.geolocation.getCurrentPosition(
-                                resolve,
-                                reject,
-                                {
-                                  enableHighAccuracy: true,
-                                  timeout: 10000,
-                                  maximumAge: 0,
-                                }
-                              );
-                            }
-                          );
-                          const lat = pos.coords.latitude;
-                          const lon = pos.coords.longitude;
+                          const pref = await getPreferredLocation();
+                          const lat = pref.lat;
+                          const lon = pref.lon;
                           const h3 = toH3(lat, lon, DEFAULT_H3_RES);
                           const center = centerOf(h3);
                           setPhotoH3Index(h3);
@@ -526,10 +561,17 @@ export default function UploadPhotoPanel({
                             setLabelLoading(false);
                           }
                         } catch (e) {
-                          setGeoError(
+                          const msg =
                             (e as GeolocationPositionError)?.message ||
-                              "Failed to get location"
-                          );
+                            "Failed to get location";
+                          setGeoError(msg);
+                          const code = (e as GeoErr)?.code;
+                          if (code === 1 || /denied/i.test(String(msg))) {
+                            try {
+                              sessionStorage.setItem("geo_denied", "1");
+                            } catch {}
+                            setGeoDenied(true);
+                          }
                         } finally {
                           setGeoLoading(false);
                         }
