@@ -7,6 +7,7 @@ import AddMiniAppButton from "@/components/AddMiniAppButton";
 import "./globals.css";
 import { Providers } from "./providers";
 import FarcasterReady from "@/components/FarcasterReady";
+import { Analytics } from '@vercel/analytics/next';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -127,6 +128,7 @@ export default function RootLayout({
             </nav>
           </Menubar>
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
