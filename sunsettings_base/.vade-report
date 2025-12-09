@@ -1,0 +1,45 @@
+# React Flight / Next.js RCE Advisory Fix
+
+## Summary
+Upgraded the sunsettings-base project to address the React Flight / Next.js RCE advisory by patching vulnerable Next.js versions.
+
+## Vulnerability Assessment
+✅ **AFFECTED**: Project uses Next.js 15.5.x
+❌ **NOT AFFECTED BY REACT FLIGHT**: No vulnerable React Flight packages found (react-server-dom-webpack, react-server-dom-parcel, react-server-dom-turbopack)
+❌ **REACT NOT VULNERABLE**: `react` and `react-dom` are not directly vulnerable (only React Flight packages are affected)
+
+## Changes Made
+
+### Files Modified
+1. **package.json**
+   - Upgraded `next` from `15.5.4` to `15.5.7` (patched version for 15.5.x)
+   - Upgraded `eslint-config-next` from `15.5.4` to `15.5.7` (must match Next.js version)
+
+2. **pnpm-lock.yaml**
+   - Updated all Next.js 15.5.7 dependencies
+   - Locked to patched versions across the dependency tree
+
+### Why These Changes
+- **Next.js 15.5.x** is affected by the RCE vulnerability; upgrade to `15.5.7` per official guidelines
+- **eslint-config-next** must match the installed Next.js version
+- **React/React-DOM** were NOT manually upgraded per instructions: "For Next.js projects, do not manually upgrade react or react-dom. Next.js will supply the correct patched React dependency versions automatically."
+
+## Project Assessment Details
+- Root project: Next.js application using Next.js 15.5.4 (vulnerable)
+- Workspace packages: sunsettings-nft (Hardhat/Solidity - not affected)
+- Package manager: pnpm
+- React version: 19.1.0 (compatible with Next.js 15.5.7)
+- No React Flight packages in use
+
+## Build Verification
+✅ Build completes successfully: `next build --turbopack` runs without errors
+✅ Linter runs without new issues (pre-existing issues unrelated to security fix)
+✅ All routes compile correctly (18 static pages generated)
+
+## Implementation Approach
+1. Identified vulnerable Next.js 15.5.4 in package.json
+2. Upgraded to patched version 15.5.7 per advisory guidelines
+3. Updated matching eslint-config-next version
+4. Regenerated lockfile with `pnpm install`
+5. Verified build succeeds with new versions
+6. Confirmed no regressions in application functionality
