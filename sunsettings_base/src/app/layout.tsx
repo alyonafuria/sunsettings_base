@@ -88,7 +88,7 @@ export default function RootLayout({
               >
                 sunsettings
               </Link>
-              <nav className="flex-1 flex items-center justify-end pr-3">
+              <nav className="flex-1 flex items-center justify-end pr-3 gap-2">
                 <AddMiniAppButton />
               </nav>
             </div>

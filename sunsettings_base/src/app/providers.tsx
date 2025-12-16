@@ -8,6 +8,8 @@ import { getConfig, getMiniAppConfig } from './wagmi';
 import { WagmiProvider } from 'wagmi';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import '@coinbase/onchainkit/styles.css';
+import '@rainbow-me/rainbowkit/styles.css';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { useMiniAppContext } from '@/hooks/useMiniAppContext';
 
 const queryClient = new QueryClient();
@@ -26,7 +28,9 @@ export function Providers(props: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         {isMini ? (
           // In Farcaster/Base App, avoid OnchainKit smart wallet modal entirely
-          props.children
+          <RainbowKitProvider theme={darkTheme()}>
+            {props.children}
+          </RainbowKitProvider>
         ) : (
           <OnchainKitProvider
             apiKey={process.env.NEXT_PUBLIC_ONCHAINKIT_API_KEY}
@@ -38,7 +42,9 @@ export function Providers(props: { children: ReactNode }) {
               paymaster,
             }}
           >
-            {props.children}
+            <RainbowKitProvider theme={darkTheme()}>
+              {props.children}
+            </RainbowKitProvider>
           </OnchainKitProvider>
         )}
       </QueryClientProvider>
