@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAccount, useDisconnect } from "wagmi";
+import ChainCombobox from "@/components/wallet/ChainCombobox";
 import BoringAvatar from "boring-avatars";
 import { getRomanticNameForAddress } from "@/lib/romanticNames";
 
@@ -23,7 +24,7 @@ export default function AccountInfo({
   displayName?: string | null;
   postTimes?: number[]; // unix seconds of posts (NFT mints)
 }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const { disconnect } = useDisconnect();
   // No connect usage here; Account page handles connection CTA when logged out
   // const { connectors, connectAsync } = useConnect();
@@ -121,14 +122,26 @@ export default function AccountInfo({
         )}
 
         {isConnected && (
-          <Button
-            type="button"
-            size="sm"
-            variant="neutral"
-            onClick={() => disconnect()}
-          >
-            Logout
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="neutral"
+              onClick={() => disconnect()}
+              className="h-11"
+            >
+              Logout
+            </Button>
+            {(() => {
+              const rawId = connector?.id ?? connector?.name ?? "";
+              const id = String(rawId).toLowerCase();
+              const name = String(connector?.name ?? "").toLowerCase();
+              const isCoinbase = /coinbase/.test(id) || /coinbase/.test(name);
+              return !isCoinbase ? (
+                <ChainCombobox compact className="w-11 h-11" />
+              ) : null;
+            })()}
+          </div>
         )}
       </div>
       {/* Stats and yearly tracker */}

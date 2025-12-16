@@ -1,22 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount } from "wagmi";
+// Modal removed per request
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 import { getBasename, getBasenameAvatar } from "@/apis/basenames";
 import type { Basename } from "@/apis/basenames";
+import WalletCombobox from "@/components/wallet/WalletCombobox";
 
 export default function AccountPage() {
   const { address, isConnecting, isConnected, chainId } = useAccount();
-  const {
-    connectors,
-    connectAsync,
-    status: connectStatus,
-    error: connectError,
-  } = useConnect();
   // const { disconnect } = useDisconnect(); // not used on this page
   const inMiniApp = useMiniAppContext();
   const isMini = inMiniApp === true;
@@ -121,13 +117,7 @@ export default function AccountPage() {
     return () => { cancelled = true };
   }, [isConnected, address]);
 
-  const connectCoinbase = async () => {
-    try {
-      // Prefer coinbaseWallet connector
-      const coinbase = connectors.find((c) => /coinbase/i.test(c.name));
-      await connectAsync({ connector: coinbase ?? connectors[0] });
-    } catch {}
-  };
+  // No modal; errors will be set by WalletCombobox via wagmi/useConnect
 
   const [authPending, setAuthPending] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
@@ -204,20 +194,10 @@ export default function AccountPage() {
                   </button>
                 )
               ) : (
-                <button
-                  type="button"
-                  onClick={connectCoinbase}
-                  className="px-4 py-2 border-2 border-black bg-secondary-background hover:opacity-90"
-                  disabled={connectStatus === 'pending'}
-                >
-                  {connectStatus === 'pending' ? 'Connecting…' : 'Connect wallet'}
-                </button>
-              )}
-              {connectError ? (
-                <div className="mt-2 text-xs text-red-600">
-                  {String(connectError.message || "Connection failed")}
+                <div className="flex flex-col items-center gap-3">
+                  <WalletCombobox placeholder="Choose a wallet to connect" />
                 </div>
-              ) : null}
+              )}
               {authError ? (
                 <div className="mt-2 text-xs text-red-600">
                   {authError}
