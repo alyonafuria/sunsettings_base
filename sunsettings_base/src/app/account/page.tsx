@@ -1,21 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { useAccount } from "wagmi";
-// Modal removed per request
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useMiniAppContext } from "@/hooks/useMiniAppContext";
 import AccountInfo from "@/components/account/AccountInfo";
 import Gallery from "@/components/account/Gallery";
 import { getBasename, getBasenameAvatar } from "@/apis/basenames";
 import type { Basename } from "@/apis/basenames";
-import WalletCombobox from "@/components/wallet/WalletCombobox";
+import PrivyLoginButton from "@/components/auth/PrivyLoginButton";
 
 export default function AccountPage() {
-  const { address, isConnecting, isConnected, chainId } = useAccount();
-  // const { disconnect } = useDisconnect(); // not used on this page
+  const { ready, authenticated } = usePrivy();
+  const { wallets } = useWallets();
   const inMiniApp = useMiniAppContext();
   const isMini = inMiniApp === true;
+
+  const address = wallets[0]?.address;
+  const isConnected = authenticated;
+  const isConnecting = !ready;
+  const chainId = wallets[0]?.chainId === 'eip155:84532' ? 84532 : 8453;
 
   type WalletItem = { image: string; time?: number };
   const [items, setItems] = React.useState<WalletItem[]>([]);
@@ -84,6 +88,14 @@ export default function AccountPage() {
   }, [refetch]);
 
   React.useEffect(() => {
+    if (!authenticated) {
+      setItems([]);
+      setBasename(null);
+      setBasenameAvatar(null);
+    }
+  }, [authenticated]);
+
+  React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -92,7 +104,7 @@ export default function AccountPage() {
           setBasenameAvatar(null);
           return;
         }
-        const name = await getBasename(address);
+        const name = await getBasename(address as `0x${string}`);
         if (!cancelled) {
           const validName: Basename | null = typeof name === 'string' && name.length ? (name as Basename) : null;
           setBasename(validName);
@@ -160,7 +172,7 @@ export default function AccountPage() {
       {/* Top section: content-sized for mobile to avoid overlap */}
       <div className="shrink-0">
         <AccountInfo
-          loading={!isConnected || isConnecting}
+          loading={isConnected && isConnecting}
           avatarUrl={basenameAvatar ?? null}
           wallet={address ?? null}
           displayName={basename ?? null}
@@ -195,7 +207,7 @@ export default function AccountPage() {
                 )
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <WalletCombobox placeholder="Choose a wallet to connect" />
+                  <PrivyLoginButton />
                 </div>
               )}
               {authError ? (
