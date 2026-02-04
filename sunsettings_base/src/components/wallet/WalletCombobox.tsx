@@ -53,7 +53,31 @@ export default function WalletCombobox({
     try {
       setError(null);
       setPending(key);
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const href = typeof window !== 'undefined' ? window.location.href : '';
       const conn = resolveConnector(key);
+      if (isMobile) {
+        if (key === 'injected' && !injected) {
+          try {
+            const url = typeof window !== 'undefined'
+              ? `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}${window.location.search}`
+              : '';
+            if (url) {
+              window.location.href = url;
+              return;
+            }
+          } catch {}
+        }
+        if (key === 'coinbase' && !coinbase) {
+          try {
+            const url = href ? `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(href)}` : '';
+            if (url) {
+              window.location.href = url;
+              return;
+            }
+          } catch {}
+        }
+      }
       if (!conn) throw new Error("No compatible wallet found");
       // If already connected to the same connector, try to prompt account selection; otherwise reset connection first
       if (isConnected && activeConnector && activeConnector.id === conn.id) {

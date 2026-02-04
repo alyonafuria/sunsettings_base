@@ -4,8 +4,7 @@ import * as React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useAccount, useDisconnect } from "wagmi";
-import ChainCombobox from "@/components/wallet/ChainCombobox";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import BoringAvatar from "boring-avatars";
 import { getRomanticNameForAddress } from "@/lib/romanticNames";
 
@@ -24,10 +23,11 @@ export default function AccountInfo({
   displayName?: string | null;
   postTimes?: number[]; // unix seconds of posts (NFT mints)
 }) {
-  const { address, isConnected, connector } = useAccount();
-  const { disconnect } = useDisconnect();
-  // No connect usage here; Account page handles connection CTA when logged out
-  // const { connectors, connectAsync } = useConnect();
+  const { authenticated, logout } = usePrivy();
+  const { wallets } = useWallets();
+  const address = wallets[0]?.address;
+  const isConnected = authenticated;
+  const connector = wallets[0];
 
   const mask = (addr?: string | null) => {
     if (!addr) return "";
@@ -127,20 +127,26 @@ export default function AccountInfo({
               type="button"
               size="sm"
               variant="neutral"
-              onClick={() => disconnect()}
+              onClick={async () => {
+                await logout();
+                if (typeof window !== 'undefined') {
+                  Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('privy:')) {
+                      localStorage.removeItem(key);
+                    }
+                  });
+                  Object.keys(sessionStorage).forEach(key => {
+                    if (key.startsWith('privy:')) {
+                      sessionStorage.removeItem(key);
+                    }
+                  });
+                }
+                window.location.reload();
+              }}
               className="h-11"
             >
               Logout
             </Button>
-            {(() => {
-              const rawId = connector?.id ?? connector?.name ?? "";
-              const id = String(rawId).toLowerCase();
-              const name = String(connector?.name ?? "").toLowerCase();
-              const isCoinbase = /coinbase/.test(id) || /coinbase/.test(name);
-              return !isCoinbase ? (
-                <ChainCombobox compact className="w-11 h-11" />
-              ) : null;
-            })()}
           </div>
         )}
       </div>
