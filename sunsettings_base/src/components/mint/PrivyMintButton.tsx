@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useWallets, useSendTransaction } from "@privy-io/react-auth";
+import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
 import { Button } from "@/components/ui/button";
 import { encodeFunctionData, type Abi } from "viem";
+import { base, baseSepolia } from "viem/chains";
 
 export function PrivyMintButton({
   contractAddress,
@@ -20,13 +21,10 @@ export function PrivyMintButton({
   onSuccess?: (txHash: string) => void;
   onError?: (error: Error) => void;
 }) {
-  const { wallets } = useWallets();
-  const { sendTransaction } = useSendTransaction();
+  const { client } = useSmartWallets();
   const [minting, setMinting] = React.useState(false);
   const [txHash, setTxHash] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-
-  const wallet = wallets[0];
 
   const mintFn = process.env.NEXT_PUBLIC_SUNSET_NFT_MINT_FUNCTION?.trim() || "safeMint";
   
@@ -44,8 +42,8 @@ export function PrivyMintButton({
   ] as const satisfies Abi;
 
   const handleMint = async () => {
-    if (!wallet) {
-      setError("No wallet connected");
+    if (!client) {
+      setError("Smart wallet not initialized");
       return;
     }
 
@@ -61,20 +59,18 @@ export function PrivyMintButton({
         args: [recipientAddress as `0x${string}`, `ipfs://${metaCid}`],
       });
 
-      // Send transaction using Privy's sendTransaction hook
-      // This will automatically use the paymaster configured in Privy Dashboard
-      const txResponse = await sendTransaction(
-        {
-          to: contractAddress,
-          data,
-          chainId,
-        },
-        {
-          address: wallet.address,
-        }
-      );
+      // Determine the chain
+      const chain = chainId === 8453 ? base : baseSepolia;
 
-      const hash = txResponse.hash;
+      // Send transaction using Privy's smart wallet client
+      // This will automatically use the paymaster configured in Privy Dashboard
+      const hash = await client.sendTransaction({
+        chain,
+        to: contractAddress,
+        data,
+        value: 0,
+      });
+
       setTxHash(hash);
       onSuccess?.(hash);
 
