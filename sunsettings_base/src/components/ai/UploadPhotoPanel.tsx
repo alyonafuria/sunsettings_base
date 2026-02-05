@@ -1,22 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useAccount, useConnect } from "wagmi";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import type { Abi } from "viem";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
 import { HelpCircle } from "lucide-react";
-import {
-  Transaction,
-  TransactionButton,
-  TransactionSponsor,
-  TransactionToast,
-  TransactionToastIcon,
-  TransactionToastLabel,
-  TransactionToastAction,
-} from "@coinbase/onchainkit/transaction";
+import { PrivyMintButton } from "@/components/mint/PrivyMintButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,16 +46,13 @@ export default function UploadPhotoPanel({
   coords?: { lat?: number; lon?: number };
   onLocationMismatchChange?: (mismatch: boolean) => void;
 }) {
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { authenticated, login } = usePrivy();
+  const { wallets } = useWallets();
+  const connectedAddress = wallets[0]?.address;
+  const isConnected = authenticated;
   // Force Base mainnet for minting and explorer links
   const currentChainId = 8453;
-  const { connectors, connectAsync, status: connectStatus } = useConnect();
-  const connectCoinbase = async () => {
-    try {
-      const coinbase = connectors.find((c) => /coinbase/i.test(c.name));
-      await connectAsync({ connector: coinbase ?? connectors[0] });
-    } catch {}
-  };
+  const connectCoinbase = login;
   const [file, setFile] = React.useState<File | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -633,7 +622,7 @@ export default function UploadPhotoPanel({
                           Connect your wallet to mint.
                         </div>
                         <Button size="sm" onClick={connectCoinbase}>
-                          Connect wallet
+                          Login
                         </Button>
                       </div>
                     );
@@ -651,38 +640,13 @@ export default function UploadPhotoPanel({
                       </div>
                     );
                   }
-                  type ContractCall = {
-                    address: `0x${string}`;
-                    abi: Abi;
-                    functionName: string;
-                    args: [string | undefined, string];
-                  };
-                  const contracts: ContractCall[] = [
-                    {
-                      address: contractAddress as `0x${string}`,
-                      abi: mintAbi,
-                      functionName: mintFn,
-                      args: [connectedAddress, `ipfs://${metaCid}`],
-                    },
-                  ];
                   return (
-                    <Transaction
-                      isSponsored
-                      calls={contracts}
-                      className="w-full"
+                    <PrivyMintButton
+                      contractAddress={contractAddress as `0x${string}`}
+                      metaCid={metaCid}
+                      recipientAddress={connectedAddress!}
                       chainId={currentChainId}
-                    >
-                      <TransactionButton
-                        className="mt-0 mr-auto ml-auto w-full border-2 border-black"
-                        text="Mint (gas covered)"
-                      />
-                      <TransactionSponsor />
-                      <TransactionToast>
-                        <TransactionToastIcon />
-                        <TransactionToastLabel />
-                        <TransactionToastAction />
-                      </TransactionToast>
-                    </Transaction>
+                    />
                   );
                 })()}
               </div>
@@ -747,11 +711,8 @@ export default function UploadPhotoPanel({
                     <Button
                       type="button"
                       onClick={connectCoinbase}
-                      disabled={connectStatus === "pending"}
                     >
-                      {connectStatus === "pending"
-                        ? "Connecting…"
-                        : "Sign up / Log in"}
+                      Sign up / Log in
                     </Button>
                   )}
                 </div>
