@@ -68,7 +68,7 @@ export function PrivyMintButton({
         chain,
         to: contractAddress,
         data,
-        value: 0,
+        value: BigInt(0),
       });
 
       setTxHash(hash);
