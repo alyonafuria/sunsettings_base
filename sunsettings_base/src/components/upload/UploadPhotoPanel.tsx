@@ -149,7 +149,6 @@ export default function UploadPhotoPanel({
   const currentChainId = 8453;
   const connectCoinbase = login;
   const [file, setFile] = React.useState<File | null>(null);
-  const fileRef = React.useRef<File | null>(null); // Persist file across re-renders
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [photoCid, setPhotoCid] = React.useState<string | null>(null);
@@ -345,18 +344,10 @@ export default function UploadPhotoPanel({
     } catch {}
   }, []);
 
-  // Restore file from ref after login
-  React.useEffect(() => {
-    if (isConnected && fileRef.current && !file) {
-      setFile(fileRef.current);
-    }
-  }, [isConnected, file]);
-
   // File input change handler (hoisted)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
-    fileRef.current = f; // Persist in ref
     // create local preview
     if (f) {
       const url = URL.createObjectURL(f);
