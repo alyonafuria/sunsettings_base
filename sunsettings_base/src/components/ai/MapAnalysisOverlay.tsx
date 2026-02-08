@@ -395,8 +395,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           );
           const weatherSummary = wf.summary;
           setSunsetText(wf.sunsetLocal || "");
-          let shouldAnalyze = true;
-          let pastCutoff = false;
+          const shouldAnalyze = true;
+          const pastCutoff = false;
           if (wf.sunsetUtc) {
             try {
               const nowMs = Date.now();
