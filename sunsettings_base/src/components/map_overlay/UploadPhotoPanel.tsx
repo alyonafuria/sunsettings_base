@@ -603,18 +603,6 @@ export default function UploadPhotoPanel({
                     currentChainId === 8453
                       ? nftAddressBase
                       : nftAddressSepolia;
-                  const mintAbi = [
-                    {
-                      type: "function",
-                      stateMutability: "nonpayable",
-                      name: mintFn,
-                      inputs: [
-                        { name: "to", type: "address" },
-                        { name: "tokenURI", type: "string" },
-                      ],
-                      outputs: [],
-                    },
-                  ] as const satisfies Abi;
                   if (!isConnected) {
                     return (
                       <div className="space-y-2">
