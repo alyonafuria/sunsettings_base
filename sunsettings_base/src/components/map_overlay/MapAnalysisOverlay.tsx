@@ -415,46 +415,49 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
                   comparison: Number.isFinite(cutoffMs) ? (nowMs > cutoffMs ? 'now>cutoff -> skip' : 'now<=cutoff -> run') : 'invalid cutoff',
                 })
               } catch {}
-              if (Number.isFinite(cutoffMs) && nowMs > cutoffMs) {
-                if (!cancelled) {
-                  // Mark that it's past sunset, but continue to analyze and show a prediction
-                  setIsPastSunset(true);
-                  // Optionally keep a friendly note; the analysis result will overwrite description afterward
-                  setDescription(
-                    "you missed sunset today, go to sleep and try tomorrow"
-                  );
-                  shouldAnalyze = false;
-                  pastCutoff = true;
-                  try {
-                    console.log('[analysis] skipped', {
-                      reason: 'past cutoff',
-                      sunsetUtc: wf.sunsetUtc,
-                      sunsetLocal: wf.sunsetLocal,
-                      nowIso: new Date(nowMs).toISOString(),
-                      cutoffIso: new Date(cutoffMs).toISOString(),
-                    })
-                  } catch {}
-                }
-              } else {
-                setIsPastSunset(false);
-              }
+              // DEMO MODE: Commenting out sunset time check to allow posting anytime
+              // if (Number.isFinite(cutoffMs) && nowMs > cutoffMs) {
+              //   if (!cancelled) {
+              //     // Mark that it's past sunset, but continue to analyze and show a prediction
+              //     setIsPastSunset(true);
+              //     // Optionally keep a friendly note; the analysis result will overwrite description afterward
+              //     setDescription(
+              //       "you missed sunset today, go to sleep and try tomorrow"
+              //     );
+              //     shouldAnalyze = false;
+              //     pastCutoff = true;
+              //     try {
+              //       console.log('[analysis] skipped', {
+              //         reason: 'past cutoff',
+              //         sunsetUtc: wf.sunsetUtc,
+              //         sunsetLocal: wf.sunsetLocal,
+              //         nowIso: new Date(nowMs).toISOString(),
+              //         cutoffIso: new Date(cutoffMs).toISOString(),
+              //       })
+              //     } catch {}
+              //   }
+              // } else {
+              //   setIsPastSunset(false);
+              // }
+              setIsPastSunset(false); // DEMO MODE: Always allow posting
             } catch {}
           } else {
             setIsPastSunset(false);
           }
+          // DEMO MODE: Commenting out date mismatch check
           // If not past cutoff, but local date mismatches, treat as past sunset for UX simplicity
-          if (!pastCutoff && wf.sunsetLocalDate && wf.nowLocalYmd && wf.nowLocalYmd !== wf.sunsetLocalDate) {
-            try {
-              console.log('[analysis] date-mismatch -> treat as past', {
-                nowLocalYmd: wf.nowLocalYmd,
-                sunsetLocalDate: wf.sunsetLocalDate,
-                decision: 'unified past-sunset UX',
-              })
-            } catch {}
-            setIsPastSunset(true);
-            setDescription("you missed sunset today, go to sleep and try tomorrow");
-            shouldAnalyze = false;
-          }
+          // if (!pastCutoff && wf.sunsetLocalDate && wf.nowLocalYmd && wf.nowLocalYmd !== wf.sunsetLocalDate) {
+          //   try {
+          //     console.log('[analysis] date-mismatch -> treat as past', {
+          //       nowLocalYmd: wf.nowLocalYmd,
+          //       sunsetLocalDate: wf.sunsetLocalDate,
+          //       decision: 'unified past-sunset UX',
+          //     })
+          //   } catch {}
+          //   setIsPastSunset(true);
+          //   setDescription("you missed sunset today, go to sleep and try tomorrow");
+          //   shouldAnalyze = false;
+          // }
           if (shouldAnalyze) {
             try { console.log('[analysis] proceeding', { reason: 'before cutoff or no sunset known' }) } catch {}
             const res = await fetch("/api/sunset-analyze", {
