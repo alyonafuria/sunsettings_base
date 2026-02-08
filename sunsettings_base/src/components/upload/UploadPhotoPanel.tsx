@@ -401,13 +401,12 @@ export default function UploadPhotoPanel({
     // Require login before taking photo
     if (!isConnected) {
       return (
-        <div className="w-full flex flex-col items-center gap-4 mx-auto text-center p-4">
-          <p className="text-sm">You need to log in to upload photos</p>
+        <div className="w-full flex flex-col items-center mx-auto p-4">
           <Button
             type="button"
             onClick={connectCoinbase}
           >
-            Sign up / Log in
+            Login or signup to continue
           </Button>
         </div>
       );
