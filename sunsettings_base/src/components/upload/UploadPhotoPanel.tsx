@@ -512,11 +512,11 @@ export default function UploadPhotoPanel({
     const imageSrc = photoCid ? imgUrl! : previewUrl || "";
     const unoptimized = true;
     const hasExif = Boolean(photoH3Index);
-    const displayLabel = hasExif
-      ? photoLocationLabel || (labelLoading ? "Resolving location…" : null)
-      : labelLoading
-      ? "Resolving location…"
-      : "Can't read photo location";
+    // Use photoLocationLabel if available, otherwise fall back to locationLabel from props
+    const displayLabel = photoLocationLabel 
+      || (labelLoading ? "Resolving location…" : null)
+      || locationLabel
+      || "Unknown location";
     return (
       <div className="mx-auto flex flex-col items-center gap-3">
         <figure className="relative w-[300px] overflow-hidden rounded-base border-2 border-border bg-background font-base shadow-shadow">
