@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FlipCard from "@/components/map_overlay/FlipCard";
-import UploadPhotoPanel from "@/components/map_overlay/UploadPhotoPanel";
+import UploadPhotoPanel from "@/components/upload/UploadPhotoPanel";
 import {
   AlertDialog,
   AlertDialogAction,

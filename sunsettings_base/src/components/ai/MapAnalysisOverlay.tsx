@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FlipCard from "@/components/ai/FlipCard";
-import UploadPhotoPanel from "@/components/ai/UploadPhotoPanel";
+import UploadPhotoPanel from "@/components/upload/UploadPhotoPanel";
 // (unused) import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
