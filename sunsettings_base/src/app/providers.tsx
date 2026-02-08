@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import { PrivyProvider } from '@privy-io/react-auth';
-import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import { WagmiProvider, createConfig } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { base, baseSepolia } from 'wagmi/chains';
@@ -38,11 +37,6 @@ export function Providers(props: { children: ReactNode }) {
           createOnLogin: 'users-without-wallets',
           noPromptOnSignature: false,
         },
-        externalWallets: {
-          coinbaseWallet: {
-            connectionOptions: 'smartWalletOnly',
-          },
-        },
         defaultChain: base,
         supportedChains: [base, baseSepolia],
         solanaClusters: [],
@@ -50,9 +44,7 @@ export function Providers(props: { children: ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={wagmiConfig as any}>
-          <SmartWalletsProvider>
-            {props.children}
-          </SmartWalletsProvider>
+          {props.children}
         </WagmiProvider>
       </QueryClientProvider>
     </PrivyProvider>
