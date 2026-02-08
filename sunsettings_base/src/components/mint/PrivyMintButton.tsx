@@ -62,7 +62,7 @@ export function PrivyMintButton({
       });
 
       // Send transaction using Privy's sendTransaction hook
-      // This will automatically use the paymaster configured in Privy Dashboard
+      // sponsor: true enables gas sponsorship via Privy's paymaster
       const txResponse = await sendTransaction(
         {
           to: contractAddress,
@@ -71,6 +71,7 @@ export function PrivyMintButton({
         },
         {
           address: wallet.address,
+          sponsor: true,
         }
       );
 
