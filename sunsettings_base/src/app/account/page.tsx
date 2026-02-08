@@ -37,9 +37,7 @@ export default function AccountPage() {
     try {
       const chain = chainId ?? 8453;
       const params = new URLSearchParams({ address, chainId: String(chain) });
-      const res = await fetch(`/api/wallet-nfts?${params.toString()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/wallet-nfts?${params.toString()}`);
       const data = await res.json();
       console.log('[AccountPage] API response:', data);
       const arr: unknown = data?.items;
