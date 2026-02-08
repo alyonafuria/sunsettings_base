@@ -8,7 +8,15 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
 import { HelpCircle } from "lucide-react";
-import { PrivyMintButton } from "@/components/mint/PrivyMintButton";
+import {
+  Transaction,
+  TransactionButton,
+  TransactionSponsor,
+  TransactionToast,
+  TransactionToastIcon,
+  TransactionToastLabel,
+  TransactionToastAction,
+} from "@coinbase/onchainkit/transaction";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -603,6 +611,18 @@ export default function UploadPhotoPanel({
                     currentChainId === 8453
                       ? nftAddressBase
                       : nftAddressSepolia;
+                  const mintAbi = [
+                    {
+                      type: "function",
+                      stateMutability: "nonpayable",
+                      name: mintFn,
+                      inputs: [
+                        { name: "to", type: "address" },
+                        { name: "tokenURI", type: "string" },
+                      ],
+                      outputs: [],
+                    },
+                  ] as const satisfies Abi;
                   if (!isConnected) {
                     return (
                       <div className="space-y-2">
@@ -628,13 +648,38 @@ export default function UploadPhotoPanel({
                       </div>
                     );
                   }
+                  type ContractCall = {
+                    address: `0x${string}`;
+                    abi: Abi;
+                    functionName: string;
+                    args: [string | undefined, string];
+                  };
+                  const contracts: ContractCall[] = [
+                    {
+                      address: contractAddress as `0x${string}`,
+                      abi: mintAbi,
+                      functionName: mintFn,
+                      args: [connectedAddress, `ipfs://${metaCid}`],
+                    },
+                  ];
                   return (
-                    <PrivyMintButton
-                      contractAddress={contractAddress as `0x${string}`}
-                      metaCid={metaCid}
-                      recipientAddress={connectedAddress!}
+                    <Transaction
+                      isSponsored
+                      calls={contracts}
+                      className="w-full"
                       chainId={currentChainId}
-                    />
+                    >
+                      <TransactionButton
+                        className="mt-0 mr-auto ml-auto w-full border-2 border-black"
+                        text="Mint (gas covered)"
+                      />
+                      <TransactionSponsor />
+                      <TransactionToast>
+                        <TransactionToastIcon />
+                        <TransactionToastLabel />
+                        <TransactionToastAction />
+                      </TransactionToast>
+                    </Transaction>
                   );
                 })()}
               </div>
