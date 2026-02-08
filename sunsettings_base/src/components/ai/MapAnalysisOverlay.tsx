@@ -37,7 +37,16 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
   const [visible, setVisible] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [probability, setProbability] = React.useState<number | null>(null);
+  const [probability, setProbability] = React.useState<number | null>(() => {
+    // Restore from localStorage if available (for OAuth redirect persistence)
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("sunset_probability");
+      return stored ? Number(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [description, setDescription] = React.useState<string>("");
   const [locationLabel, setLocationLabel] = React.useState<string>("");
   const locationLabelRef = React.useRef<string>("");
@@ -474,8 +483,15 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
               result?: { probability: number | null; description: string };
             };
             if (!cancelled && data?.result) {
-              setProbability(data.result.probability ?? null);
+              const prob = data.result.probability ?? null;
+              setProbability(prob);
               setDescription(data.result.description ?? "");
+              // Save to localStorage for OAuth redirect persistence
+              try {
+                if (prob !== null) {
+                  localStorage.setItem("sunset_probability", String(prob));
+                }
+              } catch {}
             }
           }
         } catch (e) {
