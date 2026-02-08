@@ -15,7 +15,7 @@ export default function OnboardingGate() {
     if (status === "connecting" || status === "reconnecting") return;
     try {
       const seen = localStorage.getItem("onboarding_seen") === "1";
-      const shouldOpen = !seen || !isConnected;
+      const shouldOpen = !seen && !isConnected;
       if (shouldOpen) setOpen(true);
     } catch {
       if (!isConnected) setOpen(true);

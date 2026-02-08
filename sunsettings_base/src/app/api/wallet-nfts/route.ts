@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
       ? process.env.NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS
       : process.env.NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS);
 
+  console.log('[wallet-nfts] Request params:', { address, chainId, isBaseMainnet, contractAddress });
+
   if (!contractAddress) {
     return NextResponse.json({ items: [], reason: "missing_contract_env" });
   }
@@ -112,21 +114,27 @@ export async function GET(req: NextRequest) {
       : [];
   try {
     const v2Url = `https://api.etherscan.io/v2/api?${v2Params.toString()}`;
+    console.log('[wallet-nfts] Fetching from Etherscan V2:', v2Url);
     const v2Res = await fetch(v2Url, { next: { revalidate: 10 } });
     const v2Data = (await v2Res.json().catch(() => null)) as unknown;
+    console.log('[wallet-nfts] Etherscan V2 response:', v2Data);
     if (isRecord(v2Data)) {
       const result = (v2Data as Record<string, unknown>).result;
       txs = toTokenTxArray(result);
+      console.log('[wallet-nfts] Parsed txs from V2:', txs.length);
     }
-  } catch {}
+  } catch (err) {
+    console.error('[wallet-nfts] Etherscan V2 error:', err);
+  }
 
-  // Fallback to Basescan if empty
+  // Fallback to Basescan V2 if empty
   if (txs.length === 0) {
     try {
       const apiBase = isBaseMainnet
-        ? "https://api.basescan.org/api"
-        : "https://api-sepolia.basescan.org/api";
+        ? "https://api.basescan.org/v2/api"
+        : "https://api-sepolia.basescan.org/v2/api";
       const qs = new URLSearchParams({
+        chainid: String(chainId),
         module: "account",
         action: "tokennfttx",
         contractaddress: contractAddress,
@@ -137,19 +145,26 @@ export async function GET(req: NextRequest) {
       });
       if (apiKey) qs.set("apikey", apiKey);
       const url = `${apiBase}?${qs.toString()}`;
+      console.log('[wallet-nfts] Fetching from Basescan V2:', url);
       const res = await fetch(url, { next: { revalidate: 10 } });
       const data = (await res.json().catch(() => null)) as unknown;
+      console.log('[wallet-nfts] Basescan V2 response:', data);
       if (isRecord(data)) {
         const result = (data as Record<string, unknown>).result;
         txs = toTokenTxArray(result);
+        console.log('[wallet-nfts] Parsed txs from Basescan V2:', txs.length);
       }
-    } catch {}
+    } catch (err) {
+      console.error('[wallet-nfts] Basescan V2 error:', err);
+    }
   }
 
   // Collect tokenIds received by this wallet
+  console.log('[wallet-nfts] Total txs fetched:', txs.length);
   const mine = txs.filter(
     (t) => String(t?.to).toLowerCase() === String(address).toLowerCase()
   );
+  console.log('[wallet-nfts] Txs to this address:', mine.length);
   const seen = new Set<string>();
   const tokenIds: string[] = [];
   const tokenIdToTime: Record<string, number> = {};
@@ -163,8 +178,10 @@ export async function GET(req: NextRequest) {
     const ts = t?.timeStamp ? Number(t.timeStamp) : undefined;
     if (typeof ts === "number" && !Number.isNaN(ts)) {
       tokenIdToTime[id] = ts; // seconds since epoch
+      console.log('[wallet-nfts] Token', id, 'timestamp:', ts, '-> Date:', new Date(ts * 1000).toISOString());
     }
   }
+  console.log('[wallet-nfts] tokenIdToTime mapping:', tokenIdToTime);
 
   // Resolve tokenURI via RPC
   const rpcUrl = isBaseMainnet
@@ -250,8 +267,13 @@ export async function GET(req: NextRequest) {
   );
   metas.forEach(({ i, img }) => {
     const id = tokenIds[i];
-    if (img) items.push({ image: img, time: tokenIdToTime[id] });
+    if (img) {
+      const time = tokenIdToTime[id];
+      items.push({ image: img, time });
+      console.log('[wallet-nfts] Added item:', { tokenId: id, image: img.substring(0, 50), time });
+    }
   });
+  console.log('[wallet-nfts] Final items count:', items.length, 'with timestamps:', items.filter(it => it.time).length);
   const payload = { items, count: items.length };
   setCache(cacheKey, payload);
   return NextResponse.json(payload);
