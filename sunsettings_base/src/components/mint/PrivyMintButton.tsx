@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
+import { useWallets, useSendTransaction } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { encodeFunctionData, type Abi } from "viem";
-import { base, baseSepolia } from "viem/chains";
 
 export function PrivyMintButton({
   contractAddress,
@@ -21,10 +20,13 @@ export function PrivyMintButton({
   onSuccess?: (txHash: string) => void;
   onError?: (error: Error) => void;
 }) {
-  const { client } = useSmartWallets();
+  const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
   const [minting, setMinting] = React.useState(false);
   const [txHash, setTxHash] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+
+  const wallet = wallets[0];
 
   const mintFn = process.env.NEXT_PUBLIC_SUNSET_NFT_MINT_FUNCTION?.trim() || "safeMint";
   
@@ -42,8 +44,8 @@ export function PrivyMintButton({
   ] as const satisfies Abi;
 
   const handleMint = async () => {
-    if (!client) {
-      setError("Smart wallet not initialized");
+    if (!wallet) {
+      setError("No wallet connected");
       return;
     }
 
@@ -59,18 +61,20 @@ export function PrivyMintButton({
         args: [recipientAddress as `0x${string}`, `ipfs://${metaCid}`],
       });
 
-      // Determine the chain
-      const chain = chainId === 8453 ? base : baseSepolia;
-
-      // Send transaction using Privy's smart wallet client
+      // Send transaction using Privy's sendTransaction hook
       // This will automatically use the paymaster configured in Privy Dashboard
-      const hash = await client.sendTransaction({
-        chain,
-        to: contractAddress,
-        data,
-        value: BigInt(0),
-      });
+      const txResponse = await sendTransaction(
+        {
+          to: contractAddress,
+          data,
+          chainId,
+        },
+        {
+          address: wallet.address,
+        }
+      );
 
+      const hash = txResponse.hash;
       setTxHash(hash);
       onSuccess?.(hash);
 
