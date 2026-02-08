@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import type { Option } from "./types"
-import { reverseGeocode } from "./geocode"
 import { searchPlaces, buildAcceptLanguage } from "@/lib/nominatim"
 import { getPreferredLocation } from "@/lib/location"
 
@@ -67,39 +66,38 @@ export function useLocationCombobox({
   }, [onChange, onResolveCoords])
 
   // Explicit detection (Base-aware)
-  const runDetection = React.useCallback(() => {
+  const runDetection = React.useCallback(async () => {
     setDetectLoading(true)
     setError(null)
     const controller = new AbortController()
     const t = setTimeout(() => controller.abort(), 12000)
-    ;(async () => {
-      try {
-        const pref = await getPreferredLocation()
-        const latitude = pref.lat
-        const longitude = pref.lon
-        const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
-        const { label, value: detectedValue } = await reverseGeocode(latitude, longitude, controller.signal, lang)
+    try {
+      const pref = await getPreferredLocation()
+      const latitude = pref.lat
+      const longitude = pref.lon
+      const { reverseGeocode: reverseGeocodeFn } = await import("@/components/ui/location-combobox/geocode")
+      const lang = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en"
+      const { label, value: detectedValue } = await reverseGeocodeFn(latitude, longitude, controller.signal, lang)
 
-        setLastPicked({ value: detectedValue, label })
-        setCurrentValue(detectedValue)
-        setInternalValue(detectedValue)
-        onChange?.(detectedValue)
-        try { onDetectedCoords?.(latitude, longitude) } catch {}
-        try {
-          localStorage.setItem(
-            "locationCache",
-            JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
-          )
-        } catch {}
-        setTimeout(() => setOpen(false), 0)
-      } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
-        else setError((e as Error)?.message || "Failed to detect location")
-      } finally {
-        clearTimeout(t)
-        setDetectLoading(false)
-      }
-    })()
+      setLastPicked({ value: detectedValue, label })
+      setCurrentValue(detectedValue)
+      setInternalValue(detectedValue)
+      onChange?.(detectedValue)
+      try { onDetectedCoords?.(latitude, longitude) } catch {}
+      try {
+        localStorage.setItem(
+          "locationCache",
+          JSON.stringify({ label, value: detectedValue, timestamp: Date.now() }),
+        )
+      } catch {}
+      setTimeout(() => setOpen(false), 0)
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") setError("Reverse geocoding timed out")
+      else setError((e as Error)?.message || "Failed to detect location")
+    } finally {
+      clearTimeout(t)
+      setDetectLoading(false)
+    }
   }, [onChange, onDetectedCoords])
 
   const selected =

@@ -86,8 +86,10 @@ export async function GET(req: NextRequest) {
   const cacheKey = `wallet-nfts:${address}:${chainId}:${contract || "auto"}`;
   const cached = getCache(cacheKey);
   if (cached) {
+    console.log('[wallet-nfts] Returning cached data:', cached);
     return NextResponse.json(cached);
   }
+  console.log('[wallet-nfts] No cache hit, fetching fresh data');
 
   // Try Etherscan V2
   type TokenTx = {
@@ -147,8 +149,13 @@ export async function GET(req: NextRequest) {
       const url = `${apiBase}?${qs.toString()}`;
       console.log('[wallet-nfts] Fetching from Basescan V2:', url);
       const res = await fetch(url, { next: { revalidate: 10 } });
-      const data = (await res.json().catch(() => null)) as unknown;
-      console.log('[wallet-nfts] Basescan V2 response:', data);
+      if (!res.ok) {
+        console.error('[wallet-nfts] Basescan V2 HTTP error:', res.status, res.statusText);
+      }
+      const text = await res.text();
+      console.log('[wallet-nfts] Basescan V2 raw response:', text.substring(0, 500));
+      const data = text ? JSON.parse(text) : null;
+      console.log('[wallet-nfts] Basescan V2 parsed response:', data);
       if (isRecord(data)) {
         const result = (data as Record<string, unknown>).result;
         txs = toTokenTxArray(result);
