@@ -344,12 +344,60 @@ export default function UploadPhotoPanel({
     } catch {}
   }, []);
 
+  // Restore file from IndexedDB after page reload (e.g., OAuth redirect)
+  React.useEffect(() => {
+    if (!file && isConnected) {
+      const dbName = 'sunsettings_temp';
+      const storeName = 'pending_photo';
+      const request = indexedDB.open(dbName, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.createObjectStore(storeName);
+        }
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const getReq = store.get('file');
+        getReq.onsuccess = () => {
+          const stored = getReq.result;
+          if (stored instanceof File) {
+            setFile(stored);
+            const url = URL.createObjectURL(stored);
+            setPreviewUrl(url);
+            // Clean up IndexedDB after restore
+            const delTx = db.transaction(storeName, 'readwrite');
+            delTx.objectStore(storeName).delete('file');
+          }
+        };
+      };
+    }
+  }, [isConnected, file]);
+
   // File input change handler (hoisted)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
     // create local preview
     if (f) {
+      // Store in IndexedDB for OAuth redirect persistence
+      const dbName = 'sunsettings_temp';
+      const storeName = 'pending_photo';
+      const request = indexedDB.open(dbName, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.createObjectStore(storeName);
+        }
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).put(f, 'file');
+      };
+      
       const url = URL.createObjectURL(f);
       setPreviewUrl(url);
       setCaptureTimestamp(new Date().toISOString());
