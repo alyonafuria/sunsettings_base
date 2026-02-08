@@ -360,17 +360,38 @@ export default function UploadPhotoPanel({
         const db = request.result;
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
-        const getReq = store.get('file');
-        getReq.onsuccess = () => {
-          const stored = getReq.result;
+        const getFileReq = store.get('file');
+        const getMetaReq = store.get('metadata');
+        
+        getFileReq.onsuccess = () => {
+          const stored = getFileReq.result;
           if (stored instanceof File) {
             setFile(stored);
             const url = URL.createObjectURL(stored);
             setPreviewUrl(url);
-            // Clean up IndexedDB after restore
-            const delTx = db.transaction(storeName, 'readwrite');
-            delTx.objectStore(storeName).delete('file');
           }
+        };
+        
+        getMetaReq.onsuccess = () => {
+          const meta = getMetaReq.result;
+          if (meta) {
+            if (meta.photoH3Index) setPhotoH3Index(meta.photoH3Index);
+            if (meta.photoCellCenter) setPhotoCellCenter(meta.photoCellCenter);
+            if (meta.photoLocationLabel) setPhotoLocationLabel(meta.photoLocationLabel);
+            if (meta.gpsFix) setGpsFix(meta.gpsFix);
+            if (meta.captureTimestamp) setCaptureTimestamp(meta.captureTimestamp);
+            if (typeof meta.disagree === 'boolean') setDisagree(meta.disagree);
+            if (meta.userScore !== undefined) setUserScore(meta.userScore);
+            if (meta.takenAtIso) setTakenAtIso(meta.takenAtIso);
+            if (meta.prehashSha256) setPrehashSha256(meta.prehashSha256);
+            if (meta.deviceId) setDeviceId(meta.deviceId);
+          }
+          
+          // Clean up IndexedDB after restore
+          const delTx = db.transaction(storeName, 'readwrite');
+          const delStore = delTx.objectStore(storeName);
+          delStore.delete('file');
+          delStore.delete('metadata');
         };
       };
     }
@@ -395,7 +416,23 @@ export default function UploadPhotoPanel({
       request.onsuccess = () => {
         const db = request.result;
         const tx = db.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).put(f, 'file');
+        const store = tx.objectStore(storeName);
+        // Store file and all metadata
+        store.put(f, 'file');
+        store.put({
+          photoH3Index,
+          photoCellCenter,
+          photoLocationLabel,
+          gpsFix,
+          captureTimestamp: new Date().toISOString(),
+          disagree,
+          userScore,
+          takenAtIso,
+          prehashSha256,
+          deviceId,
+          scorePercent,
+          scoreLabel,
+        }, 'metadata');
       };
       
       const url = URL.createObjectURL(f);
