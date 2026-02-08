@@ -41,6 +41,7 @@ export default function AccountPage() {
         cache: "no-store",
       });
       const data = await res.json();
+      console.log('[AccountPage] API response:', data);
       const arr: unknown = data?.items;
       type UnknownItem = { image?: unknown; time?: unknown };
       const itemsParsed: WalletItem[] = Array.isArray(arr)
@@ -54,6 +55,8 @@ export default function AccountPage() {
               time: typeof v.time === "number" ? v.time : undefined,
             }))
         : [];
+      console.log('[AccountPage] Parsed items:', itemsParsed);
+      console.log('[AccountPage] Items with time:', itemsParsed.filter(it => it.time));
       setItems(itemsParsed);
     } catch {
       setItems([]);

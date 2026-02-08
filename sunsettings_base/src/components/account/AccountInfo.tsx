@@ -186,12 +186,15 @@ function YearlySunsetStats({
   );
 
   const postSet = React.useMemo(() => {
+    console.log('[AccountInfo] postTimes received:', postTimes);
     const s = new Set<string>();
     for (const ts of postTimes || []) {
       const d = new Date(ts * 1000);
-      // Normalize to local calendar day key
-      s.add(toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate())));
+      const key = toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+      console.log('[AccountInfo] Processing timestamp:', ts, '-> Date:', d.toISOString(), '-> Key:', key);
+      s.add(key);
     }
+    console.log('[AccountInfo] postSet keys:', Array.from(s));
     return s;
   }, [postTimes]);
   const isLeap = new Date(year, 1, 29).getMonth() === 1;
@@ -340,20 +343,9 @@ function YearlySunsetStats({
     if (loading) return; // wait until content is rendered
     const container = scrollRef.current;
     if (!container) return;
-    const todayEl = container.querySelector(
-      '[data-today="true"]'
-    ) as HTMLElement | null;
-    if (!todayEl) return;
+    // Start at the beginning of the year (scroll left = 0)
     const scrollNow = () => {
-      // Place today's center at ~75% of visible width
-      const targetCenter = todayEl.offsetLeft + todayEl.offsetWidth / 2;
-      const desiredCenter = container.clientWidth * 0.75;
-      const maxScroll = container.scrollWidth - container.clientWidth;
-      const next = Math.min(
-        Math.max(targetCenter - desiredCenter, 0),
-        Math.max(maxScroll, 0)
-      );
-      container.scrollLeft = next;
+      container.scrollLeft = 0;
     };
     // Defer to next frame to ensure layout is final
     const raf = window.requestAnimationFrame(scrollNow);
@@ -402,7 +394,7 @@ function YearlySunsetStats({
             <Skeleton className="h-40 md:h-44 w-full" />
           </div>
         ) : (
-          <div className="w-full flex justify-center">
+          <div className="w-full flex justify-start">
             <div className="flex items-start">
               {monthChunks.map((chunk, idx) => (
                 <div
