@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FlipCard from "@/components/ai/FlipCard";
 import UploadPhotoPanel from "@/components/upload/UploadPhotoPanel";
+import { useResolvedLocationLabel } from "@/hooks/useResolvedLocationLabel";
 // (unused) import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -77,35 +78,23 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     }
   }, [latStr, lonStr, dayBump]);
 
-  // When coords are present, resolve a human-readable label and cache it
+  // Resolve location label from coordinates
+  const coordsLabel = typeof latNum === "number" && typeof lonNum === "number"
+    ? `${latNum.toFixed(3)}, ${lonNum.toFixed(3)}`
+    : null;
+  const resolvedLabel = useResolvedLocationLabel(latNum, lonNum, coordsLabel);
+  
+  // Update locationLabel when resolved
   React.useEffect(() => {
-    const hasCoords = typeof latNum === "number" && typeof lonNum === "number";
-    if (!hasCoords) return;
-    let cancelled = false;
-    (async () => {
+    if (resolvedLabel) {
+      setLocationLabel(resolvedLabel);
       try {
-        const res = await fetch("/api/geocode/reverse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: latNum, lon: lonNum }),
-        });
-        if (!res.ok) return;
-        const data = await res.json().catch(() => null);
-        if (cancelled) return;
-        const label =
-          data && typeof data.label === "string" && data.label.trim().length
-            ? data.label
-            : `${latNum.toFixed(3)}, ${lonNum.toFixed(3)}`;
-        setLocationLabel(label);
-        try {
-          localStorage.setItem("locationCache", JSON.stringify({ label }));
-        } catch {}
+        localStorage.setItem("locationCache", JSON.stringify({ label: resolvedLabel }));
       } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [latNum, lonNum]);
+    } else if (coordsLabel) {
+      setLocationLabel(coordsLabel);
+    }
+  }, [resolvedLabel, coordsLabel]);
 
   // Open photo panel on marker click
   React.useEffect(() => {
@@ -120,7 +109,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           locationLabel?: unknown;
           takenAtIso?: unknown;
         };
-        const d = (ce?.detail ?? {}) as PinDetail;
+        const d = (ce?.detail || {}) as Record<string, unknown>;
+        console.log('[AI MapAnalysisOverlay] Pin clicked, detail:', d);
         const metadataCid =
           typeof d.metadataCid === "string" ? d.metadataCid : null;
         const photoCid = typeof d.photoCid === "string" ? d.photoCid : null;
@@ -140,6 +130,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           typeof d.locationLabel === "string" ? d.locationLabel : null;
         const takenAtIso =
           typeof d.takenAtIso === "string" ? d.takenAtIso : null;
+        console.log('[AI MapAnalysisOverlay] Parsed pin data:', { metadataCid, photoCid, lat, lon, locationLabel, takenAtIso });
         if (!metadataCid || !photoCid || lat == null || lon == null) return;
         setSelectedPin({
           metadataCid,
@@ -174,6 +165,14 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     userScorePercent?: number | null;
     userScoreLabel?: string | null;
   } | null>(null);
+  
+  // Resolve location name via reverse geocoding if label is just coordinates
+  const resolvedLocationLabel = useResolvedLocationLabel(
+    selectedPin?.lat,
+    selectedPin?.lon,
+    selectedPin?.locationLabel
+  );
+
   React.useEffect(() => {
     let aborted = false;
     async function loadMeta() {
@@ -195,22 +194,20 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           return;
         }
         const j = raw as Record<string, unknown>;
-        const sp =
-          typeof j.sunsetScorePercent === "number"
-            ? (j.sunsetScorePercent as number)
-            : null;
-        const sl =
-          typeof j.sunsetScoreLabel === "string"
-            ? (j.sunsetScoreLabel as string)
-            : null;
-        const usp =
-          typeof j.userSunsetScorePercent === "number"
-            ? (j.userSunsetScorePercent as number)
-            : null;
-        const usl =
-          typeof j.userSunsetScoreLabel === "string"
-            ? (j.userSunsetScoreLabel as string)
-            : null;
+        // Read scores from attributes array (NFT standard)
+        const attrs = Array.isArray(j.attributes) ? j.attributes : [];
+        const findAttr = (traitType: string) => {
+          const attr = attrs.find((a: any) => a?.trait_type === traitType);
+          return attr?.value;
+        };
+        const sp = typeof findAttr("sunsettings_score") === "number" 
+          ? (findAttr("sunsettings_score") as number)
+          : null;
+        const sl = null; // Score label not stored in attributes
+        const usp = typeof findAttr("user_score") === "number"
+          ? (findAttr("user_score") as number)
+          : null;
+        const usl = null; // User score label not stored in attributes
         setMetaScores({
           scorePercent: sp,
           scoreLabel: sl,
@@ -236,6 +233,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
     const taken = selectedPin.takenAtIso
       ? new Date(selectedPin.takenAtIso).toLocaleString()
       : "";
+    const displayLabel = resolvedLocationLabel || selectedPin.locationLabel;
     return (
       <div className="pointer-events-auto">
         <Card className="relative overflow-hidden p-0">
@@ -254,14 +252,14 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
                 process.env.NEXT_PUBLIC_PINATA_GATEWAY ||
                 "https://tan-mad-gorilla-689.mypinata.cloud"
               }/ipfs/${selectedPin.photoCid}`}
-              alt={selectedPin.locationLabel || "Photo"}
+              alt={displayLabel || "Photo"}
               className="absolute inset-0 w-full h-full object-cover object-center"
             />
           </div>
           <div className="px-3 py-2">
-            {selectedPin.locationLabel && (
+            {displayLabel && (
               <div className="text-sm font-medium leading-snug truncate">
-                {selectedPin.locationLabel}
+                {displayLabel}
               </div>
             )}
             {taken && <div className="text-xs opacity-80 mt-0.5">{taken}</div>}
@@ -296,7 +294,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
         </Card>
       </div>
     );
-  }, [selectedPin, closeSelectedPin, metaScores]);
+  }, [selectedPin, closeSelectedPin, metaScores, resolvedLocationLabel]);
 
   React.useEffect(() => {
     locationLabelRef.current = locationLabel;
