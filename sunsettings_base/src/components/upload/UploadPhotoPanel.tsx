@@ -8,15 +8,9 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
 import { HelpCircle } from "lucide-react";
-import {
-  Transaction,
-  TransactionButton,
-  TransactionSponsor,
-  TransactionToast,
-  TransactionToastIcon,
-  TransactionToastLabel,
-  TransactionToastAction,
-} from "@coinbase/onchainkit/transaction";
+import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
+import { encodeFunctionData } from "viem";
+import { base } from "viem/chains";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +22,99 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+function SmartWalletMintButton({
+  contractAddress,
+  metaCid,
+  recipientAddress,
+  chainId,
+  mintFn,
+  mintAbi,
+}: {
+  contractAddress: `0x${string}`;
+  metaCid: string;
+  recipientAddress: string;
+  chainId: number;
+  mintFn: string;
+  mintAbi: Abi;
+}) {
+  const { client } = useSmartWallets();
+  const [minting, setMinting] = React.useState(false);
+  const [txHash, setTxHash] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleMint = async () => {
+    if (!client) {
+      setError("Smart wallet not initialized");
+      return;
+    }
+
+    setMinting(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const data = encodeFunctionData({
+        abi: mintAbi,
+        functionName: mintFn,
+        args: [recipientAddress as `0x${string}`, `ipfs://${metaCid}`],
+      });
+
+      const hash = await client.sendTransaction({
+        chain: base,
+        to: contractAddress,
+        data,
+        value: BigInt(0),
+      });
+
+      setTxHash(hash);
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent("sunsettings:nftMinted", {
+            detail: { txHash: hash, metadataCid: metaCid },
+          })
+        );
+      } catch {}
+    } catch (err) {
+      const errorMsg = (err as Error)?.message || "Minting failed";
+      setError(errorMsg);
+      console.error("Mint error:", err);
+    } finally {
+      setMinting(false);
+    }
+  };
+
+  if (txHash) {
+    const explorerUrl = `https://basescan.org/tx/${txHash}`;
+    return (
+      <div className="space-y-2">
+        <div className="text-sm text-green-600">Minted successfully!</div>
+        <a
+          href={explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline"
+        >
+          View on explorer
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Button
+        onClick={handleMint}
+        disabled={minting}
+        className="w-full border-2 border-black"
+      >
+        {minting ? "Minting..." : "Mint (gas covered)"}
+      </Button>
+      {error && <div className="text-xs text-red-600">{error}</div>}
+    </div>
+  );
+}
 import { toH3, centerOf, DEFAULT_H3_RES, roughlySameAtCoarse } from "@/lib/h3";
 import { getPreferredLocation } from "@/lib/location";
 
@@ -648,38 +735,15 @@ export default function UploadPhotoPanel({
                       </div>
                     );
                   }
-                  type ContractCall = {
-                    address: `0x${string}`;
-                    abi: Abi;
-                    functionName: string;
-                    args: [string | undefined, string];
-                  };
-                  const contracts: ContractCall[] = [
-                    {
-                      address: contractAddress as `0x${string}`,
-                      abi: mintAbi,
-                      functionName: mintFn,
-                      args: [connectedAddress, `ipfs://${metaCid}`],
-                    },
-                  ];
                   return (
-                    <Transaction
-                      isSponsored
-                      calls={contracts}
-                      className="w-full"
+                    <SmartWalletMintButton
+                      contractAddress={contractAddress as `0x${string}`}
+                      metaCid={metaCid}
+                      recipientAddress={connectedAddress!}
                       chainId={currentChainId}
-                    >
-                      <TransactionButton
-                        className="mt-0 mr-auto ml-auto w-full border-2 border-black"
-                        text="Mint (gas covered)"
-                      />
-                      <TransactionSponsor />
-                      <TransactionToast>
-                        <TransactionToastIcon />
-                        <TransactionToastLabel />
-                        <TransactionToastAction />
-                      </TransactionToast>
-                    </Transaction>
+                      mintFn={mintFn}
+                      mintAbi={mintAbi}
+                    />
                   );
                 })()}
               </div>
