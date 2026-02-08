@@ -344,109 +344,6 @@ export default function UploadPhotoPanel({
     } catch {}
   }, []);
 
-  // Restore file from IndexedDB after page reload (e.g., OAuth redirect)
-  React.useEffect(() => {
-    if (!file && isConnected) {
-      const dbName = 'sunsettings_temp';
-      const storeName = 'pending_photo';
-      const request = indexedDB.open(dbName, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(storeName)) {
-          db.createObjectStore(storeName);
-        }
-      };
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const getFileReq = store.get('file');
-        const getMetaReq = store.get('metadata');
-        
-        getFileReq.onsuccess = () => {
-          const stored = getFileReq.result;
-          if (stored instanceof File) {
-            setFile(stored);
-            const url = URL.createObjectURL(stored);
-            setPreviewUrl(url);
-          }
-        };
-        
-        getMetaReq.onsuccess = () => {
-          const meta = getMetaReq.result;
-          if (meta) {
-            if (meta.photoH3Index) setPhotoH3Index(meta.photoH3Index);
-            if (meta.photoCellCenter) setPhotoCellCenter(meta.photoCellCenter);
-            if (meta.photoLocationLabel) setPhotoLocationLabel(meta.photoLocationLabel);
-            if (meta.gpsFix) setGpsFix(meta.gpsFix);
-            if (meta.captureTimestamp) setCaptureTimestamp(meta.captureTimestamp);
-            if (typeof meta.disagree === 'boolean') setDisagree(meta.disagree);
-            if (meta.userScore !== undefined) setUserScore(meta.userScore);
-            if (meta.takenAtIso) setTakenAtIso(meta.takenAtIso);
-            if (meta.prehashSha256) setPrehashSha256(meta.prehashSha256);
-            if (meta.deviceId) setDeviceId(meta.deviceId);
-          }
-          
-          // Clean up IndexedDB after restore
-          const delTx = db.transaction(storeName, 'readwrite');
-          const delStore = delTx.objectStore(storeName);
-          delStore.delete('file');
-          delStore.delete('metadata');
-        };
-      };
-    }
-  }, [isConnected, file]);
-
-  // Save file and metadata to IndexedDB when all data is ready (for OAuth redirect persistence)
-  React.useEffect(() => {
-    if (!file || isConnected) return; // Only save when NOT connected (before login)
-    
-    // Wait for prehashSha256 and takenAtIso to be computed
-    if (!prehashSha256 || !takenAtIso) {
-      console.log('[IndexedDB] Waiting for metadata...', { prehashSha256, takenAtIso });
-      return;
-    }
-    
-    console.log('[IndexedDB] Saving file and metadata...', {
-      photoH3Index,
-      gpsFix,
-      prehashSha256,
-      takenAtIso,
-    });
-    
-    const dbName = 'sunsettings_temp';
-    const storeName = 'pending_photo';
-    const request = indexedDB.open(dbName, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName);
-      }
-    };
-    request.onsuccess = () => {
-      const db = request.result;
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      // Store file and all metadata
-      store.put(file, 'file');
-      store.put({
-        photoH3Index,
-        photoCellCenter,
-        photoLocationLabel,
-        gpsFix,
-        captureTimestamp,
-        disagree,
-        userScore,
-        takenAtIso,
-        prehashSha256,
-        deviceId,
-        scorePercent,
-        scoreLabel,
-      }, 'metadata');
-      console.log('[IndexedDB] Successfully saved file and metadata');
-    };
-  }, [file, isConnected, prehashSha256, takenAtIso, photoH3Index, photoCellCenter, photoLocationLabel, gpsFix, captureTimestamp, disagree, userScore, deviceId, scorePercent, scoreLabel]);
-
   // File input change handler (hoisted)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -500,6 +397,22 @@ export default function UploadPhotoPanel({
 
   if (!file && !photoCid) {
     if (!isMobile) return null;
+    
+    // Require login before taking photo
+    if (!isConnected) {
+      return (
+        <div className="w-full flex flex-col items-center gap-4 mx-auto text-center p-4">
+          <p className="text-sm">You need to log in to upload photos</p>
+          <Button
+            type="button"
+            onClick={connectCoinbase}
+          >
+            Sign up / Log in
+          </Button>
+        </div>
+      );
+    }
+    
     return (
       <>
         <input
