@@ -397,44 +397,62 @@ export default function UploadPhotoPanel({
     }
   }, [isConnected, file]);
 
+  // Save file and metadata to IndexedDB when all data is ready (for OAuth redirect persistence)
+  React.useEffect(() => {
+    if (!file || isConnected) return; // Only save when NOT connected (before login)
+    
+    // Wait for prehashSha256 and takenAtIso to be computed
+    if (!prehashSha256 || !takenAtIso) {
+      console.log('[IndexedDB] Waiting for metadata...', { prehashSha256, takenAtIso });
+      return;
+    }
+    
+    console.log('[IndexedDB] Saving file and metadata...', {
+      photoH3Index,
+      gpsFix,
+      prehashSha256,
+      takenAtIso,
+    });
+    
+    const dbName = 'sunsettings_temp';
+    const storeName = 'pending_photo';
+    const request = indexedDB.open(dbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName);
+      }
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      // Store file and all metadata
+      store.put(file, 'file');
+      store.put({
+        photoH3Index,
+        photoCellCenter,
+        photoLocationLabel,
+        gpsFix,
+        captureTimestamp,
+        disagree,
+        userScore,
+        takenAtIso,
+        prehashSha256,
+        deviceId,
+        scorePercent,
+        scoreLabel,
+      }, 'metadata');
+      console.log('[IndexedDB] Successfully saved file and metadata');
+    };
+  }, [file, isConnected, prehashSha256, takenAtIso, photoH3Index, photoCellCenter, photoLocationLabel, gpsFix, captureTimestamp, disagree, userScore, deviceId, scorePercent, scoreLabel]);
+
   // File input change handler (hoisted)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
     // create local preview
     if (f) {
-      // Store in IndexedDB for OAuth redirect persistence
-      const dbName = 'sunsettings_temp';
-      const storeName = 'pending_photo';
-      const request = indexedDB.open(dbName, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(storeName)) {
-          db.createObjectStore(storeName);
-        }
-      };
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        // Store file and all metadata
-        store.put(f, 'file');
-        store.put({
-          photoH3Index,
-          photoCellCenter,
-          photoLocationLabel,
-          gpsFix,
-          captureTimestamp: new Date().toISOString(),
-          disagree,
-          userScore,
-          takenAtIso,
-          prehashSha256,
-          deviceId,
-          scorePercent,
-          scoreLabel,
-        }, 'metadata');
-      };
-      
       const url = URL.createObjectURL(f);
       setPreviewUrl(url);
       setCaptureTimestamp(new Date().toISOString());
