@@ -96,68 +96,79 @@ export async function GET(req: NextRequest) {
         ? process.env.NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS
         : process.env.NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS) ||
       null;
+    console.log('[Feed API] Contract:', { 
+      chainId, 
+      isMainnet, 
+      contractAddress, 
+      contract,
+      envBase: process.env.NEXT_PUBLIC_SUNSET_BASE_NFT_CONTRACT_ADDRESS,
+      envSepolia: process.env.NEXT_PUBLIC_SUNSET_SEPOLIA_NFT_CONTRACT_ADDRESS
+    });
     if (!contractAddress) {
+      console.log('[Feed API] No contract address - returning empty');
       return { chainId, entries: [], contractAddress: null };
     }
 
-    const apiBase = isMainnet
-      ? "https://api.basescan.org/api"
-      : "https://api-sepolia.basescan.org/api";
+    // Use Blockscout API instead of Basescan (which is deprecated) or Alchemy RPC (which has block range limits)
+    const blockscoutBase = isMainnet
+      ? "https://base.blockscout.com/api/v2"
+      : "https://base-sepolia.blockscout.com/api/v2";
+    console.log('[Feed API] Using Blockscout:', blockscoutBase, 'for contract:', contractAddress);
 
-    const qs = new URLSearchParams({
-      module: "logs",
-      action: "getLogs",
-      address: contractAddress,
-      fromBlock: "0",
-      toBlock: "latest",
-      topic0: TRANSFER_SIG,
-      topic1: ZERO_PADDED,
-      page: String(page),
-      offset: String(offset),
-      sort: "desc",
-    });
-    if (apiKey) qs.set("apikey", apiKey);
-
-    let logs: LogEntry[] = [];
+    let entries: { tokenId: string; to: string; time: number }[] = [];
     try {
-      const url = `${apiBase}?${qs.toString()}`;
+      // Blockscout API: get token transfers (mints from 0x0 address)
+      const url = `${blockscoutBase}/tokens/${contractAddress}/transfers`;
+      console.log('[Feed API] Blockscout request:', url);
       const res = await fetch(url, { next: { revalidate: 30 } });
       const data = await res.json();
-      logs = Array.isArray(data?.result) ? (data.result as LogEntry[]) : [];
-    } catch {}
-
-    const entries: { tokenId: string; to: string; time: number }[] = [];
-    for (const l of logs) {
-      const toTopic = l.topics?.[2] || "";
-      const idTopic = l.topics?.[3] || "";
-      const to =
-        toTopic.length === 66 ? `0x${toTopic.slice(26)}`.toLowerCase() : "";
-      const tokenId = idTopic ? BigInt(idTopic).toString() : "";
-      if (!tokenId) continue;
-      if (exclude && to === exclude) continue;
-      let time = Math.floor(Date.now() / 1000);
-      if (l.timeStamp) {
-        const ts = String(l.timeStamp);
-        time = ts.startsWith("0x") ? parseInt(ts, 16) : Number(ts);
+      console.log('[Feed API] Blockscout response:', { 
+        itemsCount: Array.isArray(data?.items) ? data.items.length : 0,
+        hasItems: !!data?.items
+      });
+      
+      if (Array.isArray(data?.items)) {
+        console.log('[Feed API] First item sample:', JSON.stringify(data.items[0], null, 2));
+        
+        // Filter only mints (from 0x0) and directly convert to entries format
+        const mints = data.items.filter((item: any) => 
+          item.from?.hash?.toLowerCase() === '0x0000000000000000000000000000000000000000'
+        );
+        
+        console.log('[Feed API] Found mints:', mints.length);
+        if (mints.length > 0) {
+          console.log('[Feed API] First mint sample:', JSON.stringify(mints[0], null, 2));
+        }
+        
+        // Directly map to entries format (skip log format entirely)
+        const allEntries = mints.map((item: any) => {
+          const entry = {
+            tokenId: item.total?.token_id || '',
+            to: item.to?.hash?.toLowerCase() || '',
+            time: item.timestamp ? Math.floor(new Date(item.timestamp).getTime() / 1000) : Math.floor(Date.now() / 1000)
+          };
+          return entry;
+        }).filter((e: { tokenId: string; to: string; time: number }) => e.tokenId && e.to);
+        
+        // Apply pagination
+        const start = (page - 1) * offset;
+        entries = allEntries.slice(start, start + offset);
+        
+        console.log('[Feed API] Entries:', { total: allEntries.length, paginated: entries.length });
       }
-      entries.push({ tokenId, to, time });
+    } catch (err) {
+      console.error('[Feed API] Blockscout error:', err);
     }
 
     return { chainId, entries, contractAddress };
   }
 
-  // Try requested chain first, then fallback to the other Base network
+  // Use only the requested chain - no fallback to avoid showing wrong network data
   const primary = await fetchEntriesForChain(requestedChainId);
-  const fallbackChainId = requestedChainId === 8453 ? 84532 : 8453;
-  const secondary =
-    primary.entries.length > 0
-      ? null
-      : await fetchEntriesForChain(fallbackChainId);
-  const chosen =
-    secondary && secondary.entries.length > 0 ? secondary : primary;
-  let entries = chosen.entries;
-  const chosenChainId = chosen.chainId;
-  const chosenContract = chosen.contractAddress;
+  let entries = primary.entries;
+  const chosenChainId = primary.chainId;
+  const chosenContract = primary.contractAddress;
+  console.log('[Feed API] Chosen chain:', { chosenChainId, entriesCount: entries.length, chosenContract });
 
   // Fallback: if logs API returned nothing, try tokennfttx (contract-wide transfers)
   if (entries.length === 0 && chosenContract) {

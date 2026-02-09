@@ -22,7 +22,9 @@ function mask(addr?: string | null) {
 }
 
 export default function Feed() {
-  const { chainId } = useAccount();
+  const { chainId: wagmiChainId } = useAccount();
+  // Default to Base Mainnet (8453) if no chainId from wallet - this is where mints happen
+  const chainId = wagmiChainId || 8453;
   const [items, setItems] = React.useState<FeedItem[]>([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -37,23 +39,29 @@ export default function Feed() {
   );
 
   const loadPage = React.useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loading || !hasMore) {
+      console.log('[Feed] Skip load:', { loading, hasMore });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (chainId) params.set("chainId", String(chainId));
+      params.set("chainId", String(chainId));
       params.set("page", String(page));
       params.set("offset", "10");
+      console.log('[Feed] Fetching:', `/api/feed?${params.toString()}`, { chainId, wagmiChainId });
       // Show full collection feed; no exclusion of current user
       const res = await fetch(`/api/feed?${params.toString()}`, {
         cache: "no-store",
       });
       const data = await res.json();
+      console.log('[Feed] Response:', data);
       const next: FeedItem[] = Array.isArray(data?.items) ? data.items : [];
       setItems((prev) => {
         const seen = new Set(prev.map(itemKey));
         const uniqueNext = next.filter((n) => !seen.has(itemKey(n)));
+        console.log('[Feed] Items:', { prev: prev.length, next: next.length, unique: uniqueNext.length });
         // Update hasMore based on whether we actually appended anything
         setHasMore(Boolean(data?.hasMore) && uniqueNext.length > 0);
         return [...prev, ...uniqueNext];
@@ -61,6 +69,7 @@ export default function Feed() {
       setPage((p) => p + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load feed";
+      console.error('[Feed] Error:', e);
       setError(msg);
     } finally {
       setLoading(false);
