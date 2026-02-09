@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, type Address } from "viem";
-import { base, baseSepolia } from "viem/chains";
 
 // Simple in-memory cache (per server instance)
 const CACHE_TTL_MS = 60_000; // 60s
@@ -17,32 +15,6 @@ function getCache(key: string) {
 }
 function setCache(key: string, payload: unknown, ttlMs = CACHE_TTL_MS) {
   CACHE.set(key, { payload, expiry: Date.now() + ttlMs });
-}
-
-async function mapWithConcurrency<T, U>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T, idx: number) => Promise<U>
-): Promise<U[]> {
-  const results: U[] = new Array(items.length) as U[];
-  let next = 0;
-  const workers = new Array(Math.min(limit, items.length))
-    .fill(0)
-    .map(async () => {
-      while (next < items.length) {
-        const idx = next++;
-        results[idx] = await fn(items[idx], idx);
-      }
-    });
-  await Promise.all(workers);
-  return results;
-}
-
-function ipfsToHttp(uri: string): string {
-  if (!uri) return "";
-  return uri.startsWith("ipfs://")
-    ? `https://gateway.pinata.cloud/ipfs/${uri.slice(7)}`
-    : uri;
 }
 
 export async function GET(req: NextRequest) {
@@ -68,220 +40,46 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], reason: "missing_contract_env" });
   }
 
-  const apiKey =
-    process.env.ETHERSCAN_API_KEY || process.env.BASESCAN_API_KEY || "";
-  const v2Params = new URLSearchParams({
-    chainid: String(chainId),
-    module: "account",
-    action: "tokennfttx",
-    contractaddress: contractAddress,
-    address,
-    page: "1",
-    offset: "50",
-    sort: "desc",
-  });
-  if (apiKey) v2Params.set("apikey", apiKey);
-
-  // Check cache first (cache includes API-key-independent response shape)
+  // Note: Free Etherscan/Basescan API doesn't support Base Mainnet for tokennfttx
+  // Solution: Call feed API internally and filter by address
+  
+  // Check cache first
   const cacheKey = `wallet-nfts:${address}:${chainId}:${contract || "auto"}`;
   const cached = getCache(cacheKey);
   if (cached) {
     console.log('[wallet-nfts] Returning cached data:', cached);
     return NextResponse.json(cached);
   }
-  console.log('[wallet-nfts] No cache hit, fetching fresh data');
+  console.log('[wallet-nfts] No cache hit, fetching from feed API');
 
-  // Try Etherscan V2
-  type TokenTx = {
-    to?: string;
-    tokenID?: string;
-    tokenId?: string;
-    timeStamp?: string;
-  };
-  let txs: TokenTx[] = [];
-  const isRecord = (v: unknown): v is Record<string, unknown> =>
-    typeof v === "object" && v !== null;
-  const toTokenTxArray = (arr: unknown): TokenTx[] =>
-    Array.isArray(arr)
-      ? arr
-          .map((v) => (isRecord(v) ? (v as Record<string, unknown>) : null))
-          .filter((v): v is Record<string, unknown> => !!v)
-          .map((v) => ({
-            to: typeof v.to === "string" ? v.to : undefined,
-            tokenID: typeof v.tokenID === "string" ? v.tokenID : undefined,
-            tokenId: typeof v.tokenId === "string" ? v.tokenId : undefined,
-            timeStamp:
-              typeof v.timeStamp === "string" ? v.timeStamp : undefined,
-          }))
-      : [];
+  // Fetch from feed API (which uses Basescan getLogs that works on free tier)
   try {
-    const v2Url = `https://api.etherscan.io/v2/api?${v2Params.toString()}`;
-    console.log('[wallet-nfts] Fetching from Etherscan V2:', v2Url);
-    const v2Res = await fetch(v2Url, { next: { revalidate: 10 } });
-    const v2Data = (await v2Res.json().catch(() => null)) as unknown;
-    console.log('[wallet-nfts] Etherscan V2 response:', v2Data);
-    if (isRecord(v2Data)) {
-      const result = (v2Data as Record<string, unknown>).result;
-      txs = toTokenTxArray(result);
-      console.log('[wallet-nfts] Parsed txs from V2:', txs.length);
-    }
-  } catch (err) {
-    console.error('[wallet-nfts] Etherscan V2 error:', err);
-  }
-
-  // Fallback to Basescan V2 if empty
-  if (txs.length === 0) {
-    try {
-      const apiBase = isBaseMainnet
-        ? "https://api.basescan.org/v2/api"
-        : "https://api-sepolia.basescan.org/v2/api";
-      const qs = new URLSearchParams({
-        chainid: String(chainId),
-        module: "account",
-        action: "tokennfttx",
-        contractaddress: contractAddress,
-        address,
-        page: "1",
-        offset: "50",
-        sort: "desc",
-      });
-      if (apiKey) qs.set("apikey", apiKey);
-      const url = `${apiBase}?${qs.toString()}`;
-      console.log('[wallet-nfts] Fetching from Basescan V2:', url);
-      const res = await fetch(url, { next: { revalidate: 10 } });
-      if (!res.ok) {
-        console.error('[wallet-nfts] Basescan V2 HTTP error:', res.status, res.statusText);
-      }
-      const text = await res.text();
-      console.log('[wallet-nfts] Basescan V2 raw response:', text.substring(0, 500));
-      const data = text ? JSON.parse(text) : null;
-      console.log('[wallet-nfts] Basescan V2 parsed response:', data);
-      if (isRecord(data)) {
-        const result = (data as Record<string, unknown>).result;
-        txs = toTokenTxArray(result);
-        console.log('[wallet-nfts] Parsed txs from Basescan V2:', txs.length);
-      }
-    } catch (err) {
-      console.error('[wallet-nfts] Basescan V2 error:', err);
-    }
-  }
-
-  // Collect tokenIds received by this wallet
-  console.log('[wallet-nfts] Total txs fetched:', txs.length);
-  const mine = txs.filter(
-    (t) => String(t?.to).toLowerCase() === String(address).toLowerCase()
-  );
-  console.log('[wallet-nfts] Txs to this address:', mine.length);
-  const seen = new Set<string>();
-  const tokenIds: string[] = [];
-  const tokenIdToTime: Record<string, number> = {};
-  for (const t of mine) {
-    const id = String(
-      (t.tokenID as unknown as string) ?? (t.tokenId as unknown as string) ?? ""
+    const feedUrl = `${req.nextUrl.origin}/api/feed?chainId=${chainId}&page=1&offset=50`;
+    console.log('[wallet-nfts] Fetching from feed API:', feedUrl);
+    const feedRes = await fetch(feedUrl);
+    const feedData = await feedRes.json();
+    console.log('[wallet-nfts] Feed API response:', { itemsCount: feedData?.items?.length });
+    
+    // Filter items by address
+    const allItems = Array.isArray(feedData?.items) ? feedData.items : [];
+    const myItems = allItems.filter((item: { author?: string }) => 
+      String(item?.author).toLowerCase() === address.toLowerCase()
     );
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    tokenIds.push(id);
-    const ts = t?.timeStamp ? Number(t.timeStamp) : undefined;
-    if (typeof ts === "number" && !Number.isNaN(ts)) {
-      tokenIdToTime[id] = ts; // seconds since epoch
-      console.log('[wallet-nfts] Token', id, 'timestamp:', ts, '-> Date:', new Date(ts * 1000).toISOString());
-    }
+    console.log('[wallet-nfts] Filtered items for address:', myItems.length);
+    
+    const result = {
+      items: myItems.map((item: { image?: string; time?: number }) => ({
+        image: item.image,
+        time: item.time,
+      })),
+      count: myItems.length,
+    };
+    
+    setCache(cacheKey, result);
+    console.log('[wallet-nfts] Final items count:', result.count, 'with timestamps:', result.items.filter((i: { time?: number }) => i.time).length);
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error('[wallet-nfts] Error fetching from feed API:', err);
+    return NextResponse.json({ items: [], count: 0 });
   }
-  console.log('[wallet-nfts] tokenIdToTime mapping:', tokenIdToTime);
-
-  // Resolve tokenURI via RPC
-  const rpcUrl = isBaseMainnet
-    ? process.env.BASE_RPC_URL
-    : process.env.BASE_SEPOLIA_RPC_URL;
-  const chain = isBaseMainnet ? base : baseSepolia;
-  const fallbackRpc = chain.rpcUrls.default?.http?.[0];
-  const client = createPublicClient({
-    chain,
-    transport: http(rpcUrl || fallbackRpc),
-  });
-
-  const abi = [
-    {
-      type: "function",
-      stateMutability: "view",
-      name: "tokenURI",
-      inputs: [{ name: "tokenId", type: "uint256" }],
-      outputs: [{ name: "", type: "string" }],
-    },
-  ] as const;
-
-  // Batch tokenURI reads using multicall
-  let uris: (string | null)[] = [];
-  if (tokenIds.length > 0) {
-    try {
-      const calls = tokenIds.map((id) => ({
-        address: contractAddress as Address,
-        abi,
-        functionName: "tokenURI" as const,
-        args: [BigInt(id)],
-      }));
-      const res = await client.multicall({
-        contracts: calls,
-        allowFailure: true,
-      });
-      uris = res.map((r) =>
-        r.status === "success" ? String(r.result as string) : null
-      );
-    } catch {
-      // fallback: try sequentially but avoid throwing
-      uris = [];
-      for (const id of tokenIds) {
-        try {
-          const uri = await client.readContract({
-            address: contractAddress as Address,
-            abi,
-            functionName: "tokenURI",
-            args: [BigInt(id)],
-          });
-          uris.push(String(uri));
-        } catch {
-          uris.push(null);
-        }
-      }
-    }
-  }
-
-  // Fetch metadata with limited concurrency
-  const items: { image: string; time?: number }[] = [];
-  const metas = await mapWithConcurrency(
-    uris.map((u, i) => ({ uri: u, i })),
-    6,
-    async ({ uri, i }) => {
-      if (!uri) return { i, img: "" } as const;
-      const metaUrl = ipfsToHttp(String(uri));
-      try {
-        const metaRes = await fetch(metaUrl, { next: { revalidate: 300 } });
-        const meta = (await metaRes.json().catch(() => null)) as unknown;
-        const getImage = (m: unknown): string => {
-          if (m && typeof m === "object") {
-            const r = m as Record<string, unknown>;
-            if (typeof r.image === "string") return r.image;
-          }
-          return "";
-        };
-        const img = ipfsToHttp(getImage(meta));
-        return { i, img } as const;
-      } catch {
-        return { i, img: "" } as const;
-      }
-    }
-  );
-  metas.forEach(({ i, img }) => {
-    const id = tokenIds[i];
-    if (img) {
-      const time = tokenIdToTime[id];
-      items.push({ image: img, time });
-      console.log('[wallet-nfts] Added item:', { tokenId: id, image: img.substring(0, 50), time });
-    }
-  });
-  console.log('[wallet-nfts] Final items count:', items.length, 'with timestamps:', items.filter(it => it.time).length);
-  const payload = { items, count: items.length };
-  setCache(cacheKey, payload);
-  return NextResponse.json(payload);
 }
