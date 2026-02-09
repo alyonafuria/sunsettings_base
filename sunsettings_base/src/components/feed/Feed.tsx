@@ -286,7 +286,11 @@ export default function Feed() {
           ))}
         </ul>
 
-        {items.length === 0 && loading ? null : (
+        {items.length === 0 && loading ? (
+          <div className="h-12 flex items-center justify-center text-xs">
+            Loading…
+          </div>
+        ) : (
           <div
             ref={sentinelRef}
             className="h-12 flex items-center justify-center text-xs"

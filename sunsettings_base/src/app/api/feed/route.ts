@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     let logs: LogEntry[] = [];
     try {
       const url = `${apiBase}?${qs.toString()}`;
-      const res = await fetch(url, { next: { revalidate: 10 } });
+      const res = await fetch(url, { next: { revalidate: 30 } });
       const data = await res.json();
       logs = Array.isArray(data?.result) ? (data.result as LogEntry[]) : [];
     } catch {}
@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
     let txs: Tx[] = [];
     try {
       const url = `https://api.etherscan.io/v2/api?${v2.toString()}`;
-      const res = await fetch(url, { next: { revalidate: 10 } });
+      const res = await fetch(url, { next: { revalidate: 30 } });
       const data = await res.json();
       if (Array.isArray(data?.result)) txs = data.result as Tx[];
     } catch {}
@@ -281,57 +281,17 @@ export async function GET(req: NextRequest) {
       }));
       const metaResults = await mapWithConcurrency(
         metaInputs,
-        6,
+        12,
         async ({ uri, entry }) => {
-          if (!uri)
-            return {
-              entry,
-              img: "",
-              locationLabel: undefined as string | undefined,
-            };
+          if (!uri) return { entry, img: "" };
           const metaUrl = ipfsToHttp(uri);
           try {
             const metaRes = await fetch(metaUrl, { next: { revalidate: 300 } });
             const meta = await metaRes.json();
             const img = ipfsToHttp(String(meta?.image || ""));
-            // Attempt to resolve a human-friendly location label from metadata
-            let locationLabel: string | undefined;
-            type MetaAttr = {
-              trait_type?: string;
-              traitType?: string;
-              key?: string;
-              value?: unknown;
-              display_value?: unknown;
-            };
-            const attrs: MetaAttr[] = Array.isArray(meta?.attributes)
-              ? (meta.attributes as MetaAttr[])
-              : [];
-            const fromAttributes = attrs.find((a: MetaAttr) => {
-              const key = String(
-                a?.trait_type || a?.traitType || a?.key || ""
-              ).toLowerCase();
-              return /location|place|city|neighborhood|area/.test(key);
-            });
-            if (
-              fromAttributes &&
-              (fromAttributes.value || fromAttributes?.display_value)
-            ) {
-              locationLabel = String(
-                fromAttributes.value ?? fromAttributes.display_value ?? ""
-              );
-            }
-            locationLabel =
-              String(
-                meta?.location_label ||
-                  meta?.locationLabel ||
-                  meta?.location ||
-                  meta?.properties?.location ||
-                  locationLabel ||
-                  ""
-              ) || undefined;
-            return { entry, img, locationLabel };
+            return { entry, img };
           } catch {
-            return { entry, img: "", locationLabel: undefined };
+            return { entry, img: "" };
           }
         }
       );
@@ -342,7 +302,7 @@ export async function GET(req: NextRequest) {
             image: r.img,
             author: r.entry.to,
             time: r.entry.time,
-            locationLabel: r.locationLabel,
+            locationLabel: undefined, // Skip location parsing for speed
           });
         }
       }
@@ -358,4 +318,10 @@ export async function GET(req: NextRequest) {
   };
   setFeedCache(cacheKey, payload);
   return NextResponse.json(payload);
+}
+
+// POST endpoint to invalidate feed cache (called after minting)
+export async function POST() {
+  FEED_CACHE.clear();
+  return NextResponse.json({ ok: true, message: "Feed cache cleared" });
 }

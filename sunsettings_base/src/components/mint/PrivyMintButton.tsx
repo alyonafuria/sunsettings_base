@@ -90,6 +90,13 @@ export function PrivyMintButton({
           })
         );
       } catch {}
+
+      // Invalidate feed cache so new photo appears in gallery
+      try {
+        await fetch("/api/feed", { method: "POST" });
+      } catch {
+        console.warn("Failed to invalidate feed cache");
+      }
     } catch (err) {
       const errorMsg = (err as Error)?.message || "Minting failed";
       setError(errorMsg);
