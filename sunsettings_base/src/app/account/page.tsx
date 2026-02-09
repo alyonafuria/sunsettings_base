@@ -169,7 +169,7 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="w-full h-full overflow-auto flex flex-col">
+    <div className="w-full h-full overflow-auto flex flex-col pb-16">
       {/* Top section: content-sized for mobile to avoid overlap */}
       <div className="shrink-0">
         <AccountInfo
