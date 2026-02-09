@@ -467,31 +467,68 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           //   shouldAnalyze = false;
           // }
           if (shouldAnalyze) {
-            try { console.log('[analysis] proceeding', { reason: 'before cutoff or no sunset known' }) } catch {}
-            const res = await fetch("/api/sunset-analyze", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: locationLabelRef.current || "Unknown",
-                weatherSummary,
-                seed: Math.floor(Math.random() * 1_000_000),
-              }),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = (await res.json()) as {
-              ok?: boolean;
-              result?: { probability: number | null; description: string };
-            };
-            if (!cancelled && data?.result) {
-              const prob = data.result.probability ?? null;
-              setProbability(prob);
-              setDescription(data.result.description ?? "");
-              // Save to localStorage for OAuth redirect persistence
+            // Check cache first - cache key includes location, date, and weather summary
+            const cacheKey = `sunset_analysis_${locationLabelRef.current}_${wf.nowLocalYmd}_${weatherSummary}`;
+            let cachedResult: { probability: number | null; description: string; timestamp: number } | null = null;
+            try {
+              const cached = localStorage.getItem(cacheKey);
+              if (cached) {
+                cachedResult = JSON.parse(cached);
+                const age = Date.now() - (cachedResult?.timestamp || 0);
+                // Cache valid for 1 hour (3600000 ms)
+                if (age > 3600000) {
+                  cachedResult = null;
+                  localStorage.removeItem(cacheKey);
+                  try { console.log('[analysis] cache expired', { age, cacheKey }) } catch {}
+                } else {
+                  try { console.log('[analysis] using cache', { age, cacheKey }) } catch {}
+                }
+              }
+            } catch {}
+
+            if (cachedResult && !cancelled) {
+              // Use cached result
+              setProbability(cachedResult.probability);
+              setDescription(cachedResult.description);
               try {
-                if (prob !== null) {
-                  localStorage.setItem("sunset_probability", String(prob));
+                if (cachedResult.probability !== null) {
+                  localStorage.setItem("sunset_probability", String(cachedResult.probability));
                 }
               } catch {}
+            } else {
+              // Fetch fresh analysis
+              try { console.log('[analysis] proceeding', { reason: 'before cutoff or no sunset known' }) } catch {}
+              const res = await fetch("/api/sunset-analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: locationLabelRef.current || "Unknown",
+                  weatherSummary,
+                  seed: Math.floor(Math.random() * 1_000_000),
+                }),
+              });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = (await res.json()) as {
+                ok?: boolean;
+                result?: { probability: number | null; description: string };
+              };
+              if (!cancelled && data?.result) {
+                const prob = data.result.probability ?? null;
+                setProbability(prob);
+                setDescription(data.result.description ?? "");
+                // Save to localStorage for OAuth redirect persistence
+                try {
+                  if (prob !== null) {
+                    localStorage.setItem("sunset_probability", String(prob));
+                  }
+                  // Cache the full result with timestamp
+                  localStorage.setItem(cacheKey, JSON.stringify({
+                    probability: prob,
+                    description: data.result.description ?? "",
+                    timestamp: Date.now()
+                  }));
+                } catch {}
+              }
             }
           }
         } catch (e) {
