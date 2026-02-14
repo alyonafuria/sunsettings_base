@@ -38,27 +38,24 @@ export default function AccountInfo({
 
   // no connect button in header when not connected; keep helper for potential future use
 
-  // Compute yearly level (unique local calendar days with at least one post in the current year)
-  const yearlyLevel = React.useMemo(() => {
-    const toKeyLocal = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    };
-
-    const now = new Date();
-    const year = now.getFullYear();
-
-    // Build a set of unique local-date keys limited to this year
-    const set = new Set<string>();
-    for (const ts of postTimes || []) {
-      const d = new Date(ts * 1000);
-      if (d.getFullYear() === year) {
-        set.add(toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate())));
-      }
+  // Compute level using Fibonacci sequence: Level 1 = 1 sunset, Level 2 = 2, Level 3 = 3, Level 4 = 5, Level 5 = 8, etc.
+  const level = React.useMemo(() => {
+    const totalSunsets = (postTimes || []).length;
+    if (totalSunsets === 0) return 0;
+    
+    // Generate Fibonacci sequence until we exceed totalSunsets
+    let fib1 = 1;
+    let fib2 = 1;
+    let currentLevel = 1;
+    
+    while (fib1 <= totalSunsets) {
+      currentLevel++;
+      const next = fib1 + fib2;
+      fib2 = fib1;
+      fib1 = next;
     }
-    return set.size;
+    
+    return currentLevel - 1; // Subtract 1 because we incremented one too many times
   }, [postTimes]);
 
   return (
@@ -99,13 +96,7 @@ export default function AccountInfo({
                 </div>
               )}
 
-              {loading ? (
-                <Skeleton className="h-3 w-24" />
-              ) : (wallet ?? address) ? (
-                <div className="text-xs text-muted-foreground truncate">
-                  {mask(wallet ?? address ?? null)}
-                </div>
-              ) : null}
+              {/* Wallet address removed per request */}
 
               {loading ? (
                 <Skeleton className="h-3 w-1/2" />
@@ -113,7 +104,7 @@ export default function AccountInfo({
                 <div className="text-sm opacity-80 flex items-center gap-2">
                   <span className="truncate">{title || "sunset catcher"}</span>
                   <span className="whitespace-nowrap">
-                    LVL <span className="font-semibold">{yearlyLevel}</span>
+                    LVL <span className="font-semibold">{level}</span>
                   </span>
                 </div>
               )}

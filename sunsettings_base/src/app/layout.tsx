@@ -94,7 +94,8 @@ export default function RootLayout({
                   Home
                 </Link>
               </div>
-              <div className="flex-1 h-full border-l-2 border-border">
+              {/* Feed temporarily hidden - commented out for future implementation */}
+              {/* <div className="flex-1 h-full border-l-2 border-border">
                 <Link
                   href="/feed"
                   className="flex w-full h-full items-center justify-center text-base font-medium"
@@ -102,7 +103,7 @@ export default function RootLayout({
                 >
                   Feed
                 </Link>
-              </div>
+              </div> */}
               <div className="flex-1 h-full border-l-2 border-border">
                 <Link
                   href="/account"

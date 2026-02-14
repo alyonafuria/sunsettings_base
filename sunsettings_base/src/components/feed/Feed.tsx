@@ -235,14 +235,15 @@ export default function Feed() {
                   />
                 </div>
                 <div className="flex-1 truncate text-base font-medium">
-                  {getRomanticNameForAddress(it.author)} · {mask(it.author)}{" "}
+                  {getRomanticNameForAddress(it.author)}{" "}
                   <span className="opacity-80">
                     · LVL {levels[it.author] ?? "…"}
                   </span>
                 </div>
-                <div className="opacity-50 text-lg leading-none select-none">
+                {/* Three dots menu - commented out for future implementation */}
+                {/* <div className="opacity-50 text-lg leading-none select-none">
                   ⋯
-                </div>
+                </div> */}
               </div>
               {/* Photo */}
               <div className="w-full bg-secondary-background">
@@ -277,8 +278,8 @@ export default function Feed() {
                   </span>
                 </div>
               </div>
-              {/* Likes placeholder (non-functional) */}
-              <div className="px-3 pb-3 pt-1 text-sm flex items-center gap-4">
+              {/* Likes placeholder (non-functional) - commented out for future implementation */}
+              {/* <div className="px-3 pb-3 pt-1 text-sm flex items-center gap-4">
                 <button
                   type="button"
                   className="flex items-center gap-2 opacity-80 cursor-default h-11 px-3 rounded-base"
@@ -290,7 +291,7 @@ export default function Feed() {
                   </span>
                   <span className="text-base">Like</span>
                 </button>
-              </div>
+              </div> */}
             </li>
           ))}
         </ul>
