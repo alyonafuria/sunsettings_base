@@ -64,7 +64,7 @@ export default function HomeHeroSection() {
       )}
     >
       <div className="flex flex-col gap-4 items-center">
-        <Alert className="bg-white text-black text-center">
+        <Alert className="bg-white text-black text-center border-0">
           <AlertTitle className="justify-self-center">Calculate the beauty of the sunset</AlertTitle>
         </Alert>
         <LocationCombobox
@@ -84,7 +84,7 @@ export default function HomeHeroSection() {
             router.push(`/map?lat=${lat}&lon=${lon}&zoom=${z}`)
           }}
         >
-          <h2>Calculate</h2>
+          <h2>Let's go!</h2>
         </Button>
       </div>
     </div>
