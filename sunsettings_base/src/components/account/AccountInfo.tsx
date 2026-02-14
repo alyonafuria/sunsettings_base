@@ -43,19 +43,20 @@ export default function AccountInfo({
     const totalSunsets = (postTimes || []).length;
     if (totalSunsets === 0) return 0;
     
-    // Generate Fibonacci sequence until we exceed totalSunsets
-    let fib1 = 1;
-    let fib2 = 1;
-    let currentLevel = 1;
+    // Generate Fibonacci sequence and find the highest level reached
+    const fib = [1, 1, 2]; // Start with first 3 Fibonacci numbers
+    let level = 1;
     
-    while (fib1 <= totalSunsets) {
-      currentLevel++;
-      const next = fib1 + fib2;
-      fib2 = fib1;
-      fib1 = next;
+    // Find which Fibonacci number (level) the user has reached
+    while (level < fib.length && fib[level] <= totalSunsets) {
+      level++;
+      if (level >= fib.length) {
+        // Generate next Fibonacci number if needed
+        fib.push(fib[fib.length - 1] + fib[fib.length - 2]);
+      }
     }
     
-    return currentLevel - 1; // Subtract 1 because we incremented one too many times
+    return level;
   }, [postTimes]);
 
   return (
