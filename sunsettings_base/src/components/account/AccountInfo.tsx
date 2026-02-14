@@ -38,26 +38,48 @@ export default function AccountInfo({
 
   // no connect button in header when not connected; keep helper for potential future use
 
-  // Compute level using Fibonacci sequence: Level 1 = 1 sunset, Level 2 = 2, Level 3 = 3, Level 4 = 5, Level 5 = 8, etc.
+  // Compute level using Fibonacci sequence: 1 sunset = Level 1, 2 = Level 2, 3 = Level 3, 5 = Level 4, 8 = Level 5, etc.
   const level = React.useMemo(() => {
     const totalSunsets = (postTimes || []).length;
     if (totalSunsets === 0) return 0;
     
-    // Generate Fibonacci sequence and find the highest level reached
-    const fib = [1, 1, 2]; // Start with first 3 Fibonacci numbers
-    let level = 1;
+    // Fibonacci sequence starting with 1, 2, 3, 5, 8, 13...
+    const fib = [1, 2, 3];
     
-    // Find which Fibonacci number (level) the user has reached
-    while (level < fib.length && fib[level] <= totalSunsets) {
-      level++;
-      if (level >= fib.length) {
-        // Generate next Fibonacci number if needed
-        fib.push(fib[fib.length - 1] + fib[fib.length - 2]);
+    // Generate Fibonacci numbers until we exceed totalSunsets
+    while (fib[fib.length - 1] < totalSunsets) {
+      fib.push(fib[fib.length - 1] + fib[fib.length - 2]);
+    }
+    
+    // Find the highest level reached (index + 1)
+    for (let i = 0; i < fib.length; i++) {
+      if (totalSunsets < fib[i]) {
+        return i; // Haven't reached this level yet
       }
     }
     
-    return level;
+    return fib.length; // Reached all generated levels
   }, [postTimes]);
+
+  // Compute yearly sunsets for logging
+  const yearlySunsets = React.useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    return (postTimes || []).filter(ts => {
+      const d = new Date(ts * 1000);
+      return d.getFullYear() === year;
+    }).length;
+  }, [postTimes]);
+
+  // Log stats for debugging
+  React.useEffect(() => {
+    const totalSunsets = (postTimes || []).length;
+    console.log('[AccountInfo] Stats:', {
+      totalSunsets,
+      yearlySunsets,
+      level,
+    });
+  }, [postTimes, yearlySunsets, level]);
 
   return (
     <div className="w-full h-full p-4">

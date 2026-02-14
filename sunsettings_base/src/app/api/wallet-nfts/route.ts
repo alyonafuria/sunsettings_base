@@ -67,6 +67,30 @@ export async function GET(req: NextRequest) {
     );
     console.log('[wallet-nfts] Filtered items for address:', myItems.length);
     
+    // Calculate level using Fibonacci sequence
+    const totalSunsets = myItems.length;
+    const fib = [1, 2, 3];
+    while (fib[fib.length - 1] < totalSunsets) {
+      fib.push(fib[fib.length - 1] + fib[fib.length - 2]);
+    }
+    let level = 0;
+    for (let i = 0; i < fib.length; i++) {
+      if (totalSunsets < fib[i]) {
+        level = i;
+        break;
+      }
+    }
+    if (level === 0) level = fib.length;
+
+    // Calculate yearly sunsets
+    const now = new Date();
+    const year = now.getFullYear();
+    const yearlySunsets = myItems.filter((item: { time?: number }) => {
+      if (!item.time) return false;
+      const d = new Date(item.time * 1000);
+      return d.getFullYear() === year;
+    }).length;
+
     const result = {
       items: myItems.map((item: { image?: string; time?: number }) => ({
         image: item.image,
@@ -76,7 +100,12 @@ export async function GET(req: NextRequest) {
     };
     
     setCache(cacheKey, result);
-    console.log('[wallet-nfts] Final items count:', result.count, 'with timestamps:', result.items.filter((i: { time?: number }) => i.time).length);
+    console.log('[wallet-nfts] 📊 Stats for', address.slice(0, 6) + '...' + address.slice(-4), ':', {
+      totalSunsets,
+      yearlySunsets,
+      level,
+      itemsWithTimestamps: result.items.filter((i: { time?: number }) => i.time).length
+    });
     return NextResponse.json(result);
   } catch (err) {
     console.error('[wallet-nfts] Error fetching from feed API:', err);
