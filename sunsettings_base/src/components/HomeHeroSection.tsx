@@ -64,8 +64,8 @@ export default function HomeHeroSection() {
       )}
     >
       <div className="flex flex-col gap-4 items-center">
-        <Alert className="bg-white text-black text-center border-0">
-          <AlertTitle className="justify-self-center">Calculate the beauty of the sunset</AlertTitle>
+        <Alert className="bg-transparent text-black text-center border-0">
+          <AlertTitle className="justify-self-center text-xl" style={{ fontFamily: 'IndieFlower, cursive' }}>Calculate the beauty of the sunset</AlertTitle>
         </Alert>
         <LocationCombobox
           onOpenChange={handleOpenChange}

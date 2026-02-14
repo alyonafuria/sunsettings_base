@@ -42,6 +42,18 @@ const sunsettingsHeadline = localFont({
   display: "swap",
 });
 
+const indieFlower = localFont({
+  src: [
+    {
+      path: "../../public/fonts/IndieFlower-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-indie-flower",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "sunsettings",
   description: "Capture and share beautiful sunsets",
@@ -63,7 +75,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${suseMono.variable} antialiased h-screen overflow-hidden`}
+        className={`${geistSans.className} ${suseMono.className} ${geistSans.variable} ${geistMono.variable} ${suseMono.variable} ${indieFlower.variable} antialiased h-screen overflow-hidden`}
       >
         <Providers>
           <FarcasterReady />
