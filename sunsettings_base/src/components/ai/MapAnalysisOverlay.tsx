@@ -456,8 +456,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           //   shouldAnalyze = false;
           // }
           if (shouldAnalyze) {
-            // Check cache first - cache key includes location, date, and weather summary
-            const cacheKey = `sunset_analysis_${locationLabelRef.current}_${wf.nowLocalYmd}_${weatherSummary}`;
+            // Check cache first - cache key includes location and date only
+            const cacheKey = `sunset_analysis_${locationLabelRef.current}_${wf.nowLocalYmd}`;
             let cachedResult: { probability: number | null; description: string; timestamp: number } | null = null;
             try {
               const cached = localStorage.getItem(cacheKey);
