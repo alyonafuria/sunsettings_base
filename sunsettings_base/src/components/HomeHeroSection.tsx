@@ -87,7 +87,7 @@ export default function HomeHeroSection() {
             router.push(`/map?lat=${lat}&lon=${lon}&zoom=${z}`)
           }}
         >
-          <h2>Let's go!</h2>
+          <h2>Let&apos;s go!</h2>
         </Button>
       </div>
     </div>
