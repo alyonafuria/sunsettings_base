@@ -34,8 +34,6 @@ export default function FlipCard({
   const [showContent, setShowContent] = React.useState(true)
   const lastCloseSignal = React.useRef(closeSignal)
 
-  const shownProb = typeof probability === "number" ? `${probability}%` : loading ? "..." : "--"
-
   // Calculate sunfocard rating based on percentage
   const getSunfocardRating = React.useCallback((prob: number | null | undefined, compact?: boolean) => {
     if (typeof prob !== 'number') return []
@@ -54,6 +52,11 @@ export default function FlipCard({
         className={compact ? "w-15 h-15 -ml-2" : "w-15 h-15 -mt-3 -ml-2"}
       />
     ))
+  }, [])
+
+  // Get the count of suns for display - reuse the same logic from getSunfocardRating
+  const getSunCount = React.useCallback((prob: number | null | undefined) => {
+    return getSunfocardRating(prob).length
   }, [])
 
   // Calculate time remaining until sunset
@@ -208,8 +211,8 @@ export default function FlipCard({
                       <>
                         {loading ? (
                           <div className="text-center">
-                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"}</div>
-                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score</div>
+                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"} </div>
+                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score: {getSunCount(probability)}/5</div>
                             <p className="text-sm opacity-75">Analyzing the sunset…</p>
                           </div>
                         ) : (
@@ -221,7 +224,7 @@ export default function FlipCard({
                               </div>
                             </div>
                             <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"}</div>
-                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score</div>
+                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score: {getSunCount(probability)}/5</div>
                             <div
                               className={[
                                 "flex justify-center items-center gap-0",
