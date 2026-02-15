@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 export default function Gallery({
   items,
@@ -42,8 +44,12 @@ export default function Gallery({
   }
   if (!items || items.length === 0) {
     return (
-      <div className="h-full w-full flex items-center justify-center text-sm opacity-80">
-        start catching sunsets
+      <div className="h-full w-full flex items-center justify-center">
+        <Link href="/">
+          <Button variant="neutral" size="lg" className="text-base">
+            Start catching sunsets
+          </Button>
+        </Link>
       </div>
     );
   }

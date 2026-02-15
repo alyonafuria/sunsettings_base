@@ -64,8 +64,11 @@ export default function HomeHeroSection() {
       )}
     >
       <div className="flex flex-col gap-4 items-center">
-        <Alert className="bg-white text-black text-center">
-          <AlertTitle className="justify-self-center">Calculate the beauty of the sunset</AlertTitle>
+        <Alert className="bg-transparent text-regular text-center border-0">
+          <AlertTitle className="justify-self-center text-xl md:text-4xl text-center mx-auto line-clamp-none whitespace-normal font-normal" style={{ fontFamily: 'var(--font-suse-mono)' }}>
+            <span className="block">Calculate the beauty</span>
+            <span className="block">of the sunset</span>
+          </AlertTitle>
         </Alert>
         <LocationCombobox
           onOpenChange={handleOpenChange}
@@ -84,7 +87,7 @@ export default function HomeHeroSection() {
             router.push(`/map?lat=${lat}&lon=${lon}&zoom=${z}`)
           }}
         >
-          <h2>Calculate</h2>
+          <h2>Let&apos;s go!</h2>
         </Button>
       </div>
     </div>

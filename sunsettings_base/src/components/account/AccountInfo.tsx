@@ -38,28 +38,48 @@ export default function AccountInfo({
 
   // no connect button in header when not connected; keep helper for potential future use
 
-  // Compute yearly level (unique local calendar days with at least one post in the current year)
-  const yearlyLevel = React.useMemo(() => {
-    const toKeyLocal = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    };
-
-    const now = new Date();
-    const year = now.getFullYear();
-
-    // Build a set of unique local-date keys limited to this year
-    const set = new Set<string>();
-    for (const ts of postTimes || []) {
-      const d = new Date(ts * 1000);
-      if (d.getFullYear() === year) {
-        set.add(toKeyLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate())));
+  // Compute level using Fibonacci sequence: 1 sunset = Level 1, 2 = Level 2, 3 = Level 3, 5 = Level 4, 8 = Level 5, etc.
+  const level = React.useMemo(() => {
+    const totalSunsets = (postTimes || []).length;
+    if (totalSunsets === 0) return 0;
+    
+    // Fibonacci sequence starting with 1, 2, 3, 5, 8, 13...
+    const fib = [1, 2, 3];
+    
+    // Generate Fibonacci numbers until we exceed totalSunsets
+    while (fib[fib.length - 1] < totalSunsets) {
+      fib.push(fib[fib.length - 1] + fib[fib.length - 2]);
+    }
+    
+    // Find the highest level reached (index + 1)
+    for (let i = 0; i < fib.length; i++) {
+      if (totalSunsets < fib[i]) {
+        return i; // Haven't reached this level yet
       }
     }
-    return set.size;
+    
+    return fib.length; // Reached all generated levels
   }, [postTimes]);
+
+  // Compute yearly sunsets for logging
+  const yearlySunsets = React.useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    return (postTimes || []).filter(ts => {
+      const d = new Date(ts * 1000);
+      return d.getFullYear() === year;
+    }).length;
+  }, [postTimes]);
+
+  // Log stats for debugging
+  React.useEffect(() => {
+    const totalSunsets = (postTimes || []).length;
+    console.log('[AccountInfo] Stats:', {
+      totalSunsets,
+      yearlySunsets,
+      level,
+    });
+  }, [postTimes, yearlySunsets, level]);
 
   return (
     <div className="w-full h-full p-4">
@@ -99,13 +119,7 @@ export default function AccountInfo({
                 </div>
               )}
 
-              {loading ? (
-                <Skeleton className="h-3 w-24" />
-              ) : (wallet ?? address) ? (
-                <div className="text-xs text-muted-foreground truncate">
-                  {mask(wallet ?? address ?? null)}
-                </div>
-              ) : null}
+              {/* Wallet address removed per request */}
 
               {loading ? (
                 <Skeleton className="h-3 w-1/2" />
@@ -113,7 +127,7 @@ export default function AccountInfo({
                 <div className="text-sm opacity-80 flex items-center gap-2">
                   <span className="truncate">{title || "sunset catcher"}</span>
                   <span className="whitespace-nowrap">
-                    LVL <span className="font-semibold">{yearlyLevel}</span>
+                    LVL <span className="font-semibold">{level}</span>
                   </span>
                 </div>
               )}

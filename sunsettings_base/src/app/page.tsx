@@ -1,6 +1,7 @@
 import HomeHeroSection from "@/components/HomeHeroSection";
 import PrewarmPhotos from "@/components/PrewarmPhotos";
-import OnboardingGate from "@/components/onboarding/OnboardingGate";
+// Onboarding commented out - users prefer to skip it
+// import OnboardingGate from "@/components/onboarding/OnboardingGate";
 
 export async function generateMetadata() {
   const embed = {
@@ -41,7 +42,8 @@ export default function Home() {
   return (
     <div className="relative top-0 h-[calc(100vh-4rem)] overflow-hidden">{/* 4rem matches h-16 menubar */}
       <PrewarmPhotos />
-      <OnboardingGate />
+      {/* Onboarding commented out - users prefer to skip it */}
+      {/* <OnboardingGate /> */}
       {/* CSS-only background grid (replaces heavy Tiles component) */}
       <div
         aria-hidden

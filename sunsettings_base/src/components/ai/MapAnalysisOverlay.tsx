@@ -119,7 +119,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           takenAtIso?: unknown;
         };
         const d = (ce?.detail || {}) as Record<string, unknown>;
-        console.log('[AI MapAnalysisOverlay] Pin clicked, detail:', d);
         const metadataCid =
           typeof d.metadataCid === "string" ? d.metadataCid : null;
         const photoCid = typeof d.photoCid === "string" ? d.photoCid : null;
@@ -139,7 +138,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           typeof d.locationLabel === "string" ? d.locationLabel : null;
         const takenAtIso =
           typeof d.takenAtIso === "string" ? d.takenAtIso : null;
-        console.log('[AI MapAnalysisOverlay] Parsed pin data:', { metadataCid, photoCid, lat, lon, locationLabel, takenAtIso });
         if (!metadataCid || !photoCid || lat == null || lon == null) return;
         setSelectedPin({
           metadataCid,
@@ -412,16 +410,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
                 ? sunMs + 60 * 60 * 1000
                 : NaN;
               try {
-                console.log('[analysis] decision', {
-                  sunsetUtc: wf.sunsetUtc,
-                  sunsetLocal: wf.sunsetLocal,
-                  nowMs,
-                  nowIso: new Date(nowMs).toISOString(),
-                  sunMs,
-                  cutoffMs,
-                  cutoffIso: Number.isFinite(cutoffMs) ? new Date(cutoffMs).toISOString() : null,
-                  comparison: Number.isFinite(cutoffMs) ? (nowMs > cutoffMs ? 'now>cutoff -> skip' : 'now<=cutoff -> run') : 'invalid cutoff',
-                })
+                // Removed verbose logging
               } catch {}
               // DEMO MODE: Commenting out sunset time check to allow posting anytime
               // if (Number.isFinite(cutoffMs) && nowMs > cutoffMs) {
@@ -467,8 +456,8 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
           //   shouldAnalyze = false;
           // }
           if (shouldAnalyze) {
-            // Check cache first - cache key includes location, date, and weather summary
-            const cacheKey = `sunset_analysis_${locationLabelRef.current}_${wf.nowLocalYmd}_${weatherSummary}`;
+            // Check cache first - cache key includes location and date only
+            const cacheKey = `sunset_analysis_${locationLabelRef.current}_${wf.nowLocalYmd}`;
             let cachedResult: { probability: number | null; description: string; timestamp: number } | null = null;
             try {
               const cached = localStorage.getItem(cacheKey);
@@ -479,9 +468,7 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
                 if (age > 3600000) {
                   cachedResult = null;
                   localStorage.removeItem(cacheKey);
-                  try { console.log('[analysis] cache expired', { age, cacheKey }) } catch {}
                 } else {
-                  try { console.log('[analysis] using cache', { age, cacheKey }) } catch {}
                 }
               }
             } catch {}
@@ -497,7 +484,6 @@ export default function MapAnalysisOverlay(): React.JSX.Element {
               } catch {}
             } else {
               // Fetch fresh analysis
-              try { console.log('[analysis] proceeding', { reason: 'before cutoff or no sunset known' }) } catch {}
               const res = await fetch("/api/sunset-analyze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

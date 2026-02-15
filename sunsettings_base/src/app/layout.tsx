@@ -42,6 +42,18 @@ const sunsettingsHeadline = localFont({
   display: "swap",
 });
 
+const indieFlower = localFont({
+  src: [
+    {
+      path: "../../public/fonts/IndieFlower-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-indie-flower",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "sunsettings",
   description: "Capture and share beautiful sunsets",
@@ -63,7 +75,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${suseMono.variable} antialiased h-screen overflow-hidden`}
+        className={`${geistSans.className} ${suseMono.className} ${geistSans.variable} ${geistMono.variable} ${suseMono.variable} ${indieFlower.variable} antialiased h-screen overflow-hidden`}
       >
         <Providers>
           <FarcasterReady />
@@ -94,7 +106,8 @@ export default function RootLayout({
                   Home
                 </Link>
               </div>
-              <div className="flex-1 h-full border-l-2 border-border">
+              {/* Feed temporarily hidden - commented out for future implementation */}
+              {/* <div className="flex-1 h-full border-l-2 border-border">
                 <Link
                   href="/feed"
                   className="flex w-full h-full items-center justify-center text-base font-medium"
@@ -102,7 +115,7 @@ export default function RootLayout({
                 >
                   Feed
                 </Link>
-              </div>
+              </div> */}
               <div className="flex-1 h-full border-l-2 border-border">
                 <Link
                   href="/account"

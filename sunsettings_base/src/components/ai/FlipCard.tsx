@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Card } from "@/components/ui/card"
-import { Minimize2 } from "lucide-react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 
 export interface FlipCardProps {
   location: string
@@ -29,41 +29,58 @@ export default function FlipCard({
   sunsetText,
   isPastSunset,
 }: FlipCardProps) {
-  const [isFlipped, setIsFlipped] = React.useState(false)
+  const [isExpanded, setIsExpanded] = React.useState(false)
   const [isClosed, setIsClosed] = React.useState(false)
-  const [date] = React.useState(() => new Date())
   const [showContent, setShowContent] = React.useState(true)
   const lastCloseSignal = React.useRef(closeSignal)
 
-
-  const formattedDate = React.useMemo(() => date.toLocaleDateString("de-DE"), [date])
   const shownProb = typeof probability === "number" ? `${probability}%` : loading ? "..." : "--"
 
-  const rootStyle: React.CSSProperties = {
-    perspective: "1000px",
-    transition: "width 500ms, height 500ms, opacity 500ms",
-  }
-  const innerStyle: React.CSSProperties = {
-    transformStyle: "preserve-3d",
-    WebkitTransformStyle: "preserve-3d",
-    transform: isFlipped ? "rotateY(180deg)" : undefined,
-    transition: "transform 500ms",
-    willChange: "transform",
-    position: "relative",
-    width: "100%",
-    height: "100%",
-    cursor: loading || forceClosed ? "default" : "pointer",
-  }
-  const faceStyle: React.CSSProperties = {
-    backfaceVisibility: "hidden",
-    WebkitBackfaceVisibility: "hidden",
-    transform: "translateZ(0)",
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    borderRadius: "1rem",
-  }
+  // Calculate sunfocard rating based on percentage
+  const getSunfocardRating = React.useCallback((prob: number | null | undefined, compact?: boolean) => {
+    if (typeof prob !== 'number') return []
+    let count = 0
+    if (prob >= 0 && prob <= 15) count = 1
+    else if (prob >= 16 && prob <= 25) count = 2
+    else if (prob >= 26 && prob <= 60) count = 3
+    else if (prob >= 61 && prob <= 80) count = 4
+    else if (prob >= 81 && prob <= 100) count = 5
+    
+    return Array.from({ length: count }, (_, i) => (
+      <img 
+        key={i} 
+        src="/sunforcard.svg" 
+        alt="sunfocard" 
+        className={compact ? "w-15 h-15 -ml-2" : "w-15 h-15 -mt-3 -ml-2"}
+      />
+    ))
+  }, [])
+
+  // Calculate time remaining until sunset
+  const getTimeRemaining = React.useCallback(() => {
+    if (!sunsetText) return '--:--'
+    // Parse sunset time (assuming format like "17:16")
+    const [hours, minutes] = sunsetText.split(':').map(Number)
+    if (isNaN(hours) || isNaN(minutes)) return '--:--'
+    
+    const now = new Date()
+    const sunset = new Date()
+    sunset.setHours(hours, minutes, 0, 0)
+    
+    // If sunset has passed today, show negative time (past sunset)
+    if (sunset <= now) {
+      const diff = now.getTime() - sunset.getTime()
+      const hoursPast = Math.floor(diff / (1000 * 60 * 60))
+      const minutesPast = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      return `-${hoursPast}h ${minutesPast}m`
+    }
+    
+    const diff = sunset.getTime() - now.getTime()
+    const hoursRemaining = Math.floor(diff / (1000 * 60 * 60))
+    const minutesRemaining = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    
+    return `${hoursRemaining}h ${minutesRemaining}m`
+  }, [sunsetText])
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -73,17 +90,17 @@ export default function FlipCard({
       // Start maximize: first expand container, then reveal content
       setShowContent(false)
       setIsClosed(false)
-      window.setTimeout(() => setShowContent(true), 250)
+      window.setTimeout(() => setShowContent(true), 150)
       return
     }
-    setIsFlipped((f) => !f)
+    setIsExpanded((v) => !v)
   }
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation()
     setShowContent(false)
     setIsClosed(true)
-    setIsFlipped(false)
+    setIsExpanded(false)
   }
 
   // External control to minimize/maximize
@@ -92,11 +109,11 @@ export default function FlipCard({
       if (forceClosed) {
         setShowContent(false)
         setIsClosed(true)
-        setIsFlipped(false)
+        setIsExpanded(false)
       } else {
         // When releasing external close, reveal content after the size transition
         setIsClosed(false)
-        window.setTimeout(() => setShowContent(true), 250)
+        window.setTimeout(() => setShowContent(true), 150)
       }
     }
   }, [forceClosed])
@@ -107,54 +124,75 @@ export default function FlipCard({
     lastCloseSignal.current = closeSignal
     setShowContent(false)
     setIsClosed(true)
-    setIsFlipped(false)
+    setIsExpanded(false)
   }, [closeSignal])
 
   return (
     <div
       className={[
         "mx-auto animate-in fade-in-50",
-        isClosed ? "w-56 h-32" : "w-full h-44",
+        "w-full",
         className ?? "",
       ].join(" ")}
-      style={rootStyle}
     >
       <div
         onClick={handleCardClick}
-        style={innerStyle}
-        className={["transition-transform duration-200", isClosed ? "scale-100" : "scale-100"].join(" ")}
+        className={["w-full", loading || forceClosed ? "cursor-default" : "cursor-pointer"].join(" ")}
       >
         {/* Maximize button removed per design */}
         {/* Front */}
-        <div style={{ ...faceStyle, pointerEvents: isFlipped ? "none" : undefined }}>
-          <Card className="relative w-full h-full px-5 py-6 flex flex-col justify-center items-center">
-            {!isClosed && !isFlipped && !isPastSunset && (
+        <div className="w-full">
+          <Card
+            className={[
+              "relative w-full px-4 flex flex-col gap-0 overflow-hidden transition-[height] duration-300 ease-in-out",
+              isClosed ? "py-0 h-14 justify-center" : isExpanded ? "py-2 h-88" : "py-1 h-44",
+            ].join(" ")}
+          >
+            {!isClosed && (
+              <div className="flex items-center gap-1 text-base opacity-75 mb-1">
+                <span>{isExpanded ? "tap for less" : "tap for more"}</span>
+                {isExpanded ? (
+                  <ArrowDown className="w-4 h-4" />
+                ) : (
+                  <ArrowUp className="w-4 h-4" />
+                )}
+              </div>
+            )}
+
+            {!isClosed && !isPastSunset && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleClose(e)
                 }}
-                className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
-                style={{ opacity: isFlipped ? 0 : 1, transition: "opacity 150ms" }}
+                className="absolute top-1 right-1 w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
                 aria-label="Close card"
               >
-                <Minimize2 className="w-6 h-6 md:w-6 md:h-6" />
+                <svg className="w-4 h-4" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <path d="M2 2L30 30M2 30L30 2" />
+</svg>
               </button>
             )}
-            <div className="text-center">
+
+            {/* Middle section - Sunset info */}
+            <div
+              className={[
+                "text-center flex flex-col justify-center mt-0",
+                isExpanded ? "flex-none" : "flex-1",
+              ].join(" ")}
+            >
               {isClosed ? (
                 isPastSunset ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 leading-snug px-2">
                       <div>you missed sunset today.</div>
-                      <div>go to sleep and try again tomorrow</div>
+                      <div>try again tomorrow</div>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <div className="text-lg md:text-xl font-bold mb-1">Sunset</div>
-                    <div className="text-5xl font-extrabold">
-                      {shownProb}
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex justify-center items-center gap-0">
+                      {getSunfocardRating(probability, true)}
                     </div>
                   </div>
                 )
@@ -162,36 +200,37 @@ export default function FlipCard({
                 showContent ? (
                   <>
                     {isPastSunset ? (
-                      <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 leading-snug px-2">
+                      <div className="text-center text-base md:text-lg font-semibold opacity-90 leading-snug px-2">
                         <div>you missed sunset today.</div>
-                        <div>go to sleep and try again tomorrow</div>
+                        <div>try again tomorrow</div>
                       </div>
                     ) : (
                       <>
-                        {sunsetText && (
-                          <div className="text-[11px] opacity-70 mb-0.5">Sunset: {sunsetText}</div>
-                        )}
-                        <div className="text-[13px] font-medium mb-1 opacity-90 leading-snug">Today in {location || "—"}</div>
-                        <div className="text-2xl font-bold mb-1 leading-tight">Sunset Beauty</div>
-                        <div className="relative">
-                          <div className="text-5xl font-extrabold leading-none">
-                            {shownProb}
+                        {loading ? (
+                          <div className="text-center">
+                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"}</div>
+                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score</div>
+                            <p className="text-sm opacity-75">Analyzing the sunset…</p>
                           </div>
-                        </div>
-                        <div className="mt-0.5 text-[13px] font-medium opacity-85 leading-snug">
-                          {(function(){
-                            if (typeof probability !== 'number') return '—'
-                            const p = probability
-                            if (p <= 30) return 'Horrible'
-                            if (p <= 50) return 'Poor'
-                            if (p <= 70) return 'Okay'
-                            if (p <= 90) return 'Great'
-                            return 'Fabulous'
-                          })()}
-                        </div>
-                        <p className="mt-0.5 text-[12px] opacity-75 leading-snug">{loading ? "Analyzing the sunset…" : "Tap card for details"}</p>
-                        {!loading && typeof probability === "number" && probability === 0 && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5">No data</p>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center mb-0.5 mt-0">
+                              <div className="text-base opacity-70">Sunset: {sunsetText || '--:--'}</div>
+                              <div className="text-base opacity-75">
+                                Remains: {getTimeRemaining()}
+                              </div>
+                            </div>
+                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"}</div>
+                            <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score</div>
+                            <div
+                              className={[
+                                "flex justify-center items-center gap-0",
+                                isExpanded ? "mb-0" : "mb-2",
+                              ].join(" ")}
+                            >
+                              {getSunfocardRating(probability)}
+                            </div>
+                          </>
                         )}
                       </>
                     )}
@@ -199,55 +238,23 @@ export default function FlipCard({
                 ) : null
               )}
             </div>
-          </Card>
-        </div>
 
-        {/* Back */}
-        <div style={{ ...faceStyle, transform: "rotateY(180deg)", pointerEvents: isFlipped ? undefined : "none" }}>
-          <Card className="relative w-full h-full p-6 flex flex-col justify-center">
-            {!isClosed && isFlipped && !isPastSunset && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleClose(e)
-                }}
-                className="absolute top-2 right-2 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-colors duration-200 z-10 bg-secondary/60 hover:bg-secondary touch-manipulation"
-                style={{ opacity: isFlipped ? 1 : 0, transition: "opacity 150ms" }}
-                aria-label="Close card"
-              >
-                <Minimize2 className="w-6 h-6 md:w-6 md:h-6" />
-              </button>
-            )}
-            <div className="text-sm leading-relaxed opacity-95">
-              {isClosed ? (
-                isPastSunset ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center text-[15px] md:text-lg font-semibold opacity-90 px-2">
-                    <div>you missed sunset today.</div>
-                    <div>go to sleep and try again tomorrow</div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <div className="text-sm font-bold mb-1">Details</div>
-                    <div className="text-sm opacity-80">Tap to expand</div>
-                  </div>
-                )
-              ) : (
-                isPastSunset ? (
-                  <div className="text-center text-[15px] md:text-lg font-semibold opacity-90 px-2">
-                    <div>you missed sunset today.</div>
-                    <div>go to sleep and try again tomorrow</div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mb-3 text-lg font-semibold opacity-95">{formattedDate}</div>
-                    {loading && <div className="opacity-90">Fetching description...</div>}
-                    {!loading && error && <span className="text-destructive">{error}</span>}
-                    {!loading && !error && (
-                      <span>{description && description.trim().length > 0 ? description : "No description available."}</span>
-                    )}
-                  </>
-                )
-              )}
+            {/* Back */}
+            <div
+              className={[
+                "grid transition-[grid-template-rows] duration-300 ease-in-out",
+                isExpanded && !isClosed ? "grid-rows-[1fr] mt-0" : "grid-rows-[0fr]",
+              ].join(" ")}
+            >
+              <div className="overflow-hidden">
+                <div className="flex-1 overflow-auto text-base leading-relaxed opacity-95 pb-3 text-left">
+                  {loading && <div className="opacity-90">Fetching description...</div>}
+                  {!loading && error && <span className="text-destructive">{error}</span>}
+                  {!loading && !error && (
+                    <span>{description && description.trim().length > 0 ? description : "No description available."}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </Card>
         </div>
