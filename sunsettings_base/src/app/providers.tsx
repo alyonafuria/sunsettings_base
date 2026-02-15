@@ -40,7 +40,7 @@ export function Providers(props: { children: ReactNode }) {
           theme: 'dark',
           accentColor: '#000000',
         },
-        loginMethods: ['google', 'wallet'],
+        loginMethods: ['google', 'email'],
         embeddedWallets: {
           createOnLogin: 'users-without-wallets',
           noPromptOnSignature: false,
