@@ -57,6 +57,12 @@ export default function FlipCard({
   // Get the count of suns for display - reuse the same logic from getSunfocardRating
   const getSunCount = React.useCallback((prob: number | null | undefined) => {
     return getSunfocardRating(prob).length
+  }, [getSunfocardRating])
+
+  // Truncate location name if too long
+  const truncateLocation = React.useCallback((loc: string | null | undefined, maxLength: number = 20) => {
+    if (!loc) return loc
+    return loc.length > maxLength ? `${loc.slice(0, maxLength)}...` : loc
   }, [])
 
   // Calculate time remaining until sunset
@@ -211,7 +217,7 @@ export default function FlipCard({
                       <>
                         {loading ? (
                           <div className="text-center">
-                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"} </div>
+                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {truncateLocation(location) || "—"} </div>
                             <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score: {getSunCount(probability)}/5</div>
                             <p className="text-sm opacity-75">Analyzing the sunset…</p>
                           </div>
@@ -223,7 +229,7 @@ export default function FlipCard({
                                 Remains: {getTimeRemaining()}
                               </div>
                             </div>
-                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {location || "—"}</div>
+                            <div className="text-xl font-medium mb-0.5 opacity-90">Today in {truncateLocation(location) || "—"}</div>
                             <div className="text-xl font-bold mb-0.5 leading-tight">Sunset Score: {getSunCount(probability)}/5</div>
                             <div
                               className={[
